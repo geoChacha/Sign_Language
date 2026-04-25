@@ -1,0 +1,8 @@
+{
+  "temperature": 0.8431880164055026,
+  "baseline_nll": 1.3443979024887085,
+  "baseline_ece": 10.635981874088564,
+  "calibrated_nll": 1.2965779304504395,
+  "calibrated_ece": 4.823050246788905,
+  "val_accuracy": 69.52662467956543
+}
