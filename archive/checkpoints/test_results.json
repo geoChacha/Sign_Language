@@ -1,0 +1,438 @@
+{
+  "top1": 49.0,
+  "top5": 85.0,
+  "per_class": {
+    "1": {
+      "gloss": "drink",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "2": {
+      "gloss": "computer",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "3": {
+      "gloss": "before",
+      "correct": 3,
+      "total": 3,
+      "acc": 100.0
+    },
+    "5": {
+      "gloss": "go",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "6": {
+      "gloss": "clothes",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "7": {
+      "gloss": "who",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "8": {
+      "gloss": "candy",
+      "correct": 0,
+      "total": 3,
+      "acc": 0.0
+    },
+    "9": {
+      "gloss": "cousin",
+      "correct": 1,
+      "total": 2,
+      "acc": 50.0
+    },
+    "10": {
+      "gloss": "deaf",
+      "correct": 2,
+      "total": 2,
+      "acc": 100.0
+    },
+    "11": {
+      "gloss": "fine",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "12": {
+      "gloss": "help",
+      "correct": 2,
+      "total": 2,
+      "acc": 100.0
+    },
+    "13": {
+      "gloss": "no",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "14": {
+      "gloss": "thin",
+      "correct": 2,
+      "total": 2,
+      "acc": 100.0
+    },
+    "15": {
+      "gloss": "walk",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "16": {
+      "gloss": "year",
+      "correct": 2,
+      "total": 2,
+      "acc": 100.0
+    },
+    "17": {
+      "gloss": "yes",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "18": {
+      "gloss": "all",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "20": {
+      "gloss": "cool",
+      "correct": 0,
+      "total": 2,
+      "acc": 0.0
+    },
+    "21": {
+      "gloss": "finish",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "23": {
+      "gloss": "like",
+      "correct": 0,
+      "total": 2,
+      "acc": 0.0
+    },
+    "26": {
+      "gloss": "now",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "29": {
+      "gloss": "thanksgiving",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "30": {
+      "gloss": "what",
+      "correct": 1,
+      "total": 3,
+      "acc": 33.33333333333333
+    },
+    "31": {
+      "gloss": "woman",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "33": {
+      "gloss": "blue",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "34": {
+      "gloss": "bowling",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "35": {
+      "gloss": "can",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "36": {
+      "gloss": "dog",
+      "correct": 1,
+      "total": 2,
+      "acc": 50.0
+    },
+    "38": {
+      "gloss": "fish",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "41": {
+      "gloss": "hearing",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "42": {
+      "gloss": "kiss",
+      "correct": 1,
+      "total": 2,
+      "acc": 50.0
+    },
+    "43": {
+      "gloss": "language",
+      "correct": 2,
+      "total": 2,
+      "acc": 100.0
+    },
+    "46": {
+      "gloss": "shirt",
+      "correct": 1,
+      "total": 2,
+      "acc": 50.0
+    },
+    "47": {
+      "gloss": "study",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "48": {
+      "gloss": "tall",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "49": {
+      "gloss": "white",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "50": {
+      "gloss": "wrong",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "51": {
+      "gloss": "accident",
+      "correct": 1,
+      "total": 2,
+      "acc": 50.0
+    },
+    "53": {
+      "gloss": "bird",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "54": {
+      "gloss": "change",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "55": {
+      "gloss": "color",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "56": {
+      "gloss": "corn",
+      "correct": 0,
+      "total": 2,
+      "acc": 0.0
+    },
+    "57": {
+      "gloss": "cow",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "59": {
+      "gloss": "dark",
+      "correct": 1,
+      "total": 2,
+      "acc": 50.0
+    },
+    "60": {
+      "gloss": "doctor",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "63": {
+      "gloss": "forget",
+      "correct": 1,
+      "total": 2,
+      "acc": 50.0
+    },
+    "64": {
+      "gloss": "give",
+      "correct": 0,
+      "total": 2,
+      "acc": 0.0
+    },
+    "65": {
+      "gloss": "last",
+      "correct": 0,
+      "total": 2,
+      "acc": 0.0
+    },
+    "66": {
+      "gloss": "meet",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "68": {
+      "gloss": "pizza",
+      "correct": 0,
+      "total": 2,
+      "acc": 0.0
+    },
+    "69": {
+      "gloss": "play",
+      "correct": 2,
+      "total": 2,
+      "acc": 100.0
+    },
+    "71": {
+      "gloss": "secretary",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "72": {
+      "gloss": "short",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "73": {
+      "gloss": "time",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "74": {
+      "gloss": "want",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "75": {
+      "gloss": "work",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "76": {
+      "gloss": "africa",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "77": {
+      "gloss": "basketball",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "78": {
+      "gloss": "birthday",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "79": {
+      "gloss": "brown",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "80": {
+      "gloss": "but",
+      "correct": 0,
+      "total": 2,
+      "acc": 0.0
+    },
+    "81": {
+      "gloss": "cheat",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "82": {
+      "gloss": "city",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "85": {
+      "gloss": "full",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "86": {
+      "gloss": "how",
+      "correct": 2,
+      "total": 2,
+      "acc": 100.0
+    },
+    "88": {
+      "gloss": "letter",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "89": {
+      "gloss": "medicine",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "93": {
+      "gloss": "pull",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "94": {
+      "gloss": "purple",
+      "correct": 1,
+      "total": 1,
+      "acc": 100.0
+    },
+    "95": {
+      "gloss": "right",
+      "correct": 0,
+      "total": 2,
+      "acc": 0.0
+    },
+    "96": {
+      "gloss": "same",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    },
+    "98": {
+      "gloss": "tell",
+      "correct": 0,
+      "total": 1,
+      "acc": 0.0
+    }
+  }
+}
