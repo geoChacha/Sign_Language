@@ -1,0 +1,9 @@
+{
+  "total_signs": 100,
+  "successful_extractions": 22,
+  "failed_extractions": 52,
+  "skipped": 1964,
+  "output_directory": "keypoints_full",
+  "timestamp": "2026-05-01 22:42:22",
+  "status": "complete"
+}
