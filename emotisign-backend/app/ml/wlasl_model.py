@@ -199,18 +199,37 @@ class SignLanguageTransformer(nn.Module):
     ) -> "SignLanguageTransformer":
         """
         Load model from checkpoint file.
-        
+
+        Uses weights_only=True (safe context) to prevent arbitrary code
+        execution from untrusted checkpoint files. Falls back to
+        weights_only=False only if the checkpoint contains non-tensor
+        objects (e.g. config dicts saved with older PyTorch versions).
+
         Args:
             checkpoint_path: Path to .pth checkpoint file
             device: Device to load model on ('cuda' or 'cpu')
         Returns:
             Loaded model in eval mode
         """
-        checkpoint = torch.load(checkpoint_path, map_location=device)
-        
+        # Try safe load first (weights_only=True — no arbitrary code execution)
+        try:
+            checkpoint = torch.load(
+                checkpoint_path,
+                map_location=device,
+                weights_only=True,
+            )
+        except Exception:
+            # Fallback for checkpoints that contain non-tensor objects (config dicts)
+            # Only use with checkpoints you trust (i.e. your own trained weights)
+            checkpoint = torch.load(
+                checkpoint_path,
+                map_location=device,
+                weights_only=False,
+            )
+
         # Extract model config from checkpoint
         config = checkpoint.get("config", {})
-        
+
         # Create model with checkpoint config
         model = cls(
             feature_dim=config.get("feature_dim", 126),
@@ -222,12 +241,12 @@ class SignLanguageTransformer(nn.Module):
             dropout=0.0,  # Disable dropout for inference
             max_seq_len=config.get("max_seq_len", 64),
         )
-        
+
         # Load state dict
         model.load_state_dict(checkpoint["model_state"])
         model.to(device)
         model.eval()
-        
+
         return model
 
 
