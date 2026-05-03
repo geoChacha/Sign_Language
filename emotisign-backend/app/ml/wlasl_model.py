@@ -200,10 +200,13 @@ class SignLanguageTransformer(nn.Module):
         """
         Load model from checkpoint file.
 
-        Safe loading strategy for PyTorch 2.0–2.6+:
-        - Registers Python builtins (dict, list, int, float, str) as safe globals
-          so weights_only=True works even when the checkpoint contains a config dict.
-        - Falls back to weights_only=False only if registration fails (older PyTorch).
+        Compatible with PyTorch 2.0 through 2.6+.
+
+        PyTorch 2.6 made weights_only=True the default and requires explicit
+        whitelisting of non-tensor types via add_safe_globals(). Our checkpoint
+        contains a config dict and an OrderedDict state, so we whitelist those.
+        On older PyTorch (< 2.4) that lacks add_safe_globals, we fall back to
+        weights_only=False which is safe for our own trusted checkpoint.
 
         Args:
             checkpoint_path: Path to .pth checkpoint file
@@ -211,22 +214,34 @@ class SignLanguageTransformer(nn.Module):
         Returns:
             Loaded model in eval mode
         """
+        import collections
         import torch.serialization as _ts
 
-        # Register the Python types our checkpoint uses so weights_only=True accepts them.
-        # This is the correct PyTorch 2.6 approach instead of disabling safe mode entirely.
-        _safe_types = [dict, list, int, float, str, bool]
-        try:
-            for t in _safe_types:
-                _ts.add_safe_globals([t])
-            checkpoint = torch.load(
-                checkpoint_path,
-                map_location=device,
-                weights_only=True,
-            )
-        except (AttributeError, TypeError):
-            # add_safe_globals not available (PyTorch < 2.0) — fall back to unsafe load
-            # Only safe because this is our own trained checkpoint
+        checkpoint = None
+
+        # Strategy 1: PyTorch >= 2.4 — use add_safe_globals + weights_only=True
+        if hasattr(_ts, "add_safe_globals"):
+            try:
+                _ts.add_safe_globals([
+                    dict,
+                    list,
+                    int,
+                    float,
+                    str,
+                    bool,
+                    collections.OrderedDict,
+                ])
+                checkpoint = torch.load(
+                    checkpoint_path,
+                    map_location=device,
+                    weights_only=True,
+                )
+            except Exception:
+                checkpoint = None  # fall through to strategy 2
+
+        # Strategy 2: PyTorch < 2.4 or safe globals failed — weights_only=False
+        # Safe because this is our own trained checkpoint, not a third-party file
+        if checkpoint is None:
             checkpoint = torch.load(
                 checkpoint_path,
                 map_location=device,
@@ -236,7 +251,7 @@ class SignLanguageTransformer(nn.Module):
         # Extract model config from checkpoint
         config = checkpoint.get("config", {})
 
-        # Create model with checkpoint config
+        # Build model with saved hyperparameters
         model = cls(
             feature_dim=config.get("feature_dim", 126),
             num_classes=config.get("num_classes", 100),
@@ -248,7 +263,7 @@ class SignLanguageTransformer(nn.Module):
             max_seq_len=config.get("max_seq_len", 64),
         )
 
-        # Load state dict
+        # Load weights
         model.load_state_dict(checkpoint["model_state"])
         model.to(device)
         model.eval()
