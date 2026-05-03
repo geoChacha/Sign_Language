@@ -1,0 +1,47 @@
+# EmotiSign Backend — Python 3.9/3.10 compatible
+# Install with: pip install -r requirements.txt
+
+# Web framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# File uploads (multipart/form-data)
+python-multipart==0.0.12
+
+# JWT authentication
+python-jose[cryptography]==3.3.0
+
+# Password hashing
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
+
+# Database (async SQLite)
+sqlalchemy==2.0.36
+aiosqlite==0.20.0
+
+# Pydantic v2 + settings
+pydantic[email]==2.10.3
+pydantic-settings==2.6.1
+
+# Async file I/O
+aiofiles==24.1.0
+
+# ML Dependencies for WLASL-100 Model
+# NumPy - MUST be installed first for compatibility
+numpy==1.26.4
+
+# PyTorch (CPU version - for GPU, see README)
+torch==2.0.1
+torchvision==0.15.2
+
+# MediaPipe for keypoint extraction (updated for numpy 1.26 compatibility)
+mediapipe==0.10.14
+
+# OpenCV for video processing (updated for numpy 1.26 compatibility)
+opencv-python==4.10.0.84
+
+# Testing dependencies
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+requests==2.31.0

@@ -1,0 +1,142 @@
+# ============================================================
+# EmotiSign — Root .gitignore
+# Covers: Python backend, Next.js frontend, ML models, tooling
+# ============================================================
+
+
+# ── Secrets & environment ────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+
+# ── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+emotisign-backend/venv/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+
+# mypy / type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Distribution
+*.whl
+
+
+# ── ML Models — INCLUDED in repo (small enough) ─────────────
+# .pth and .npy files ARE committed so clone-and-run works.
+# Do NOT add *.pth or *.npy to this file.
+
+
+# ── Node.js / Next.js ────────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Next.js build output
+emotisign-frontend/.next/
+emotisign-frontend/out/
+emotisign-frontend/build/
+
+# Coverage
+coverage/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel
+
+
+# ── Uploads & generated files ────────────────────────────────
+emotisign-backend/uploads/
+emotisign-backend/static/signs/
+!emotisign-backend/static/signs/.gitkeep
+
+# SQLite database (regenerated on first run)
+emotisign-backend/*.db
+emotisign-backend/*.db-shm
+emotisign-backend/*.db-wal
+
+
+# ── OS & editor ──────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# VSCode (keep workspace recommendations, ignore personal settings)
+.vscode/settings.json
+.vscode/launch.json
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+
+# Cursor
+.cursor/
+
+# Kiro (keep specs, ignore cache)
+.kiro/cache/
+.kiro/tmp/
+
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*

@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EmotiSign — API Tester</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0a0a0f;--surface:#12121a;--surface2:#1a1a26;--border:#2a2a3d;
+    --accent:#6c63ff;--accent2:#ff6b9d;--accent3:#00d4aa;--warn:#ffb347;
+    --text:#e8e8f0;--muted:#6b6b8a;--success:#00d4aa;--error:#ff4757;
+    --mono:'Space Mono',monospace;--sans:'DM Sans',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(108,99,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(108,99,255,.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+  .app{position:relative;z-index:1;}
+  header{padding:16px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:rgba(10,10,15,.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;}
+  .logo{font-family:var(--mono);font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px;}
+  .logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .header-right{display:flex;align-items:center;gap:14px;font-size:12px;font-family:var(--mono);}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);transition:background .3s;}
+  .status-dot.online{background:var(--success);box-shadow:0 0 8px var(--success);}
+  .status-dot.offline{background:var(--error);}
+  .layout{display:grid;grid-template-columns:210px 1fr;min-height:calc(100vh - 57px);}
+  aside{border-right:1px solid var(--border);padding:12px 0;position:sticky;top:57px;height:calc(100vh - 57px);overflow-y:auto;}
+  .nav-section{padding:8px 14px 3px;font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-top:6px;}
+  .nav-item{display:flex;align-items:center;gap:8px;padding:9px 14px;cursor:pointer;font-size:13px;color:var(--muted);transition:all .15s;border-left:2px solid transparent;}
+  .nav-item:hover{color:var(--text);background:rgba(108,99,255,.05);}
+  .nav-item.active{color:var(--accent);border-left-color:var(--accent);background:rgba(108,99,255,.08);}
+  .nav-badge{margin-left:auto;font-size:9px;padding:2px 5px;border-radius:3px;font-family:var(--mono);}
+  .badge-rest{background:rgba(0,212,170,.15);color:var(--accent3);}
+  .badge-ws{background:rgba(108,99,255,.15);color:var(--accent);}
+  main{padding:28px;overflow-y:auto;}
+  .panel{display:none;} .panel.active{display:block;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:18px;}
+  .card-header{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+  .card-icon{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+  .card-title{font-size:14px;font-weight:600;} .card-subtitle{font-size:11px;color:var(--muted);margin-top:1px;}
+  .token-display{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:9px 12px;font-family:var(--mono);font-size:11px;color:var(--accent3);word-break:break-all;min-height:34px;cursor:pointer;transition:border-color .2s;}
+  .token-display:hover{border-color:var(--accent3);}
+  .form-group{margin-bottom:14px;}
+  label{display:block;font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;}
+  input[type=text],input[type=email],input[type=password],textarea,select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:7px;font-family:var(--sans);font-size:13px;outline:none;transition:border-color .2s;}
+  input:focus,textarea:focus,select:focus{border-color:var(--accent);}
+  input[type=file]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:7px;width:100%;font-size:13px;}
+  textarea{resize:vertical;min-height:72px;}
+  select option{background:var(--surface2);}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .btn{padding:9px 18px;border-radius:7px;border:none;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:7px;}
+  .btn-primary{background:var(--accent);color:#fff;} .btn-primary:hover{background:#7c74ff;transform:translateY(-1px);}
+  .btn-danger{background:var(--error);color:#fff;} .btn-danger:hover{background:#ff6070;}
+  .btn-success{background:var(--accent3);color:#0a0a0f;font-weight:600;} .btn-success:hover{background:#00e8b8;}
+  .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);} .btn-outline:hover{border-color:var(--accent);color:var(--accent);}
+  .btn-sm{padding:6px 12px;font-size:12px;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+  .response-box{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:12px;font-family:var(--mono);font-size:11px;line-height:1.6;max-height:260px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:var(--muted);margin-top:14px;}
+  .response-box.success{border-color:rgba(0,212,170,.3);color:var(--accent3);}
+  .response-box.error{border-color:rgba(255,71,87,.3);color:var(--error);}
+  .ws-log{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:12px;font-family:var(--mono);font-size:11px;line-height:1.8;height:220px;overflow-y:auto;margin-top:14px;}
+  .log-entry{display:flex;gap:8px;padding:1px 0;}
+  .log-time{color:var(--muted);flex-shrink:0;} .log-in{color:var(--accent3);} .log-out{color:var(--accent2);} .log-sys{color:var(--warn);} .log-err{color:var(--error);}
+  .live-result{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:18px;margin-top:14px;min-height:70px;display:flex;flex-direction:column;gap:8px;}
+  .result-text{font-size:20px;font-weight:500;line-height:1.4;}
+  .result-text.partial{color:var(--muted);font-style:italic;}
+  .emotion-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-family:var(--mono);width:fit-content;}
+  .confidence-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:4px;}
+  .confidence-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent3));border-radius:2px;transition:width .4s ease;}
+  .sign-frames{display:flex;flex-wrap:wrap;gap:7px;padding:14px;background:var(--surface2);border-radius:7px;margin-top:10px;min-height:55px;}
+  .sign-char{width:40px;height:40px;background:var(--surface);border:1px solid var(--border);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:16px;font-weight:700;color:var(--accent);animation:popIn .2s ease;}
+  .sign-char.active{background:var(--accent);color:#fff;border-color:var(--accent);transform:scale(1.15);}
+  @keyframes popIn{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+  .webcam-container{position:relative;background:var(--surface2);border:1px solid var(--border);border-radius:9px;overflow:hidden;aspect-ratio:4/3;max-width:360px;}
+  #webcam-video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);}
+  .webcam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.75);font-size:12px;color:var(--muted);flex-direction:column;gap:6px;}
+  .recording-indicator{position:absolute;top:10px;right:10px;display:none;align-items:center;gap:5px;background:rgba(255,71,87,.2);border:1px solid var(--error);border-radius:20px;padding:3px 9px;font-size:10px;font-family:var(--mono);color:var(--error);}
+  .rec-dot{width:7px;height:7px;background:var(--error);border-radius:50%;animation:blink 1s infinite;}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+  .webcam-grid{display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start;}
+  .audio-viz{display:flex;align-items:flex-end;gap:3px;height:36px;padding:4px;background:var(--surface2);border-radius:6px;overflow:hidden;}
+  .viz-bar{width:5px;background:var(--accent);border-radius:2px;min-height:4px;transition:height .1s;}
+  .section-title{font-size:20px;font-weight:600;margin-bottom:5px;display:flex;align-items:center;gap:8px;}
+  .section-desc{font-size:12px;color:var(--muted);margin-bottom:20px;}
+  .chat-box{background:var(--bg);border:1px solid var(--border);border-radius:7px;height:260px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;}
+  .chat-msg{max-width:72%;padding:9px 12px;border-radius:11px;font-size:13px;line-height:1.5;animation:slideIn .2s ease;}
+  @keyframes slideIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+  .chat-msg.sent{background:var(--accent);color:#fff;margin-left:auto;border-bottom-right-radius:3px;}
+  .chat-msg.received{background:var(--surface2);border:1px solid var(--border);border-bottom-left-radius:3px;}
+  .chat-msg .meta{font-size:9px;opacity:.6;margin-top:3px;font-family:var(--mono);}
+  .chat-input-row{display:flex;gap:8px;margin-top:10px;}
+  .chat-input-row input{flex:1;}
+  ::-webkit-scrollbar{width:4px;height:4px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+  #toast-container{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:7px;z-index:999;}
+  .toast{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;min-width:220px;animation:toastIn .3s ease;display:flex;align-items:center;gap:8px;}
+  @keyframes toastIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:none}}
+  .toast.success{border-color:rgba(0,212,170,.4);} .toast.error{border-color:rgba(255,71,87,.4);}
+  .divider{border:none;border-top:1px solid var(--border);margin:18px 0;}
+  canvas{display:none;}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="logo"><div class="logo-icon">🤟</div>EmotiSign Tester</div>
+  <div class="header-right">
+    <div class="status-dot" id="server-dot"></div>
+    <span id="server-status" style="color:var(--muted)">checking...</span>
+    <span style="color:var(--border)">|</span>
+    <span id="auth-status" style="color:var(--muted)">not logged in</span>
+  </div>
+</header>
+
+<div class="layout">
+<aside>
+  <div class="nav-section">Auth</div>
+  <div class="nav-item active" data-panel="auth" onclick="showPanel(this,'auth')">🔐 Login / Register <span class="nav-badge badge-rest">REST</span></div>
+  <div class="nav-section">Translation</div>
+  <div class="nav-item" data-panel="text2sign" onclick="showPanel(this,'text2sign')">✍️ Text → Sign <span class="nav-badge badge-rest">REST</span></div>
+  <div class="nav-item" data-panel="sign2text" onclick="showPanel(this,'sign2text')">📹 Sign → Text <span class="nav-badge badge-rest">REST</span></div>
+  <div class="nav-section">Speech</div>
+  <div class="nav-item" data-panel="stt" onclick="showPanel(this,'stt')">🎤 Speech → Text <span class="nav-badge badge-rest">REST</span></div>
+  <div class="nav-item" data-panel="tts" onclick="showPanel(this,'tts')">🔊 Text → Speech <span class="nav-badge badge-rest">REST</span></div>
+  <div class="nav-section">Real-Time WS</div>
+  <div class="nav-item" data-panel="live-sign" onclick="showPanel(this,'live-sign')">⚡ Live Sign → Text <span class="nav-badge badge-ws">WS</span></div>
+  <div class="nav-item" data-panel="live-text" onclick="showPanel(this,'live-text')">⚡ Live Text → Sign <span class="nav-badge badge-ws">WS</span></div>
+  <div class="nav-item" data-panel="live-stt" onclick="showPanel(this,'live-stt')">⚡ Live Speech → Text <span class="nav-badge badge-ws">WS</span></div>
+  <div class="nav-section">Chat</div>
+  <div class="nav-item" data-panel="chat" onclick="showPanel(this,'chat')">💬 Real-Time Chat <span class="nav-badge badge-ws">WS</span></div>
+  <div class="nav-section">Account</div>
+  <div class="nav-item" data-panel="profile" onclick="showPanel(this,'profile')">👤 Profile & Logout <span class="nav-badge badge-rest">REST</span></div>
+</aside>
+
+<main>
+
+<!-- AUTH -->
+<div class="panel active" id="panel-auth">
+  <div class="section-title">🔐 Authentication</div>
+  <div class="section-desc">Start here — register then login to get your JWT token used by all other panels.</div>
+  <div class="row">
+    <div class="card">
+      <div class="card-header"><div class="card-icon" style="background:rgba(108,99,255,.15)">✨</div><div><div class="card-title">Register</div><div class="card-subtitle">Create new account</div></div></div>
+      <div class="form-group"><label>Username</label><input id="reg-username" value="hamza_test"></div>
+      <div class="form-group"><label>Email</label><input id="reg-email" type="email" value="hamza@test.com"></div>
+      <div class="form-group"><label>Password</label><input id="reg-password" type="password" value="testpass123"></div>
+      <div class="form-group"><label>Full Name</label><input id="reg-fullname" value="Muhammad Hamza"></div>
+      <div class="row">
+        <div class="form-group"><label>Role</label><select id="reg-role"><option value="hearing">Hearing</option><option value="deaf">Deaf</option></select></div>
+        <div class="form-group"><label>Sign Language</label><select id="reg-lang"><option value="ASL">ASL</option><option value="PSL">PSL</option></select></div>
+      </div>
+      <button class="btn btn-primary" onclick="doRegister()">Register →</button>
+      <div class="response-box" id="reg-response">Awaiting request...</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon" style="background:rgba(0,212,170,.15)">🔑</div><div><div class="card-title">Login</div><div class="card-subtitle">Get JWT token</div></div></div>
+      <div class="form-group"><label>Username</label><input id="login-username" value="hamza_test"></div>
+      <div class="form-group"><label>Password</label><input id="login-password" type="password" value="testpass123"></div>
+      <button class="btn btn-success" onclick="doLogin()">Login & Get Token →</button>
+      <div style="margin-top:14px"><label>JWT Token (click to copy)</label><div class="token-display" id="token-display" onclick="copyToken()">Login to get token...</div></div>
+      <div class="response-box" id="login-response">Awaiting request...</div>
+    </div>
+  </div>
+</div>
+
+<!-- TEXT TO SIGN -->
+<div class="panel" id="panel-text2sign">
+  <div class="section-title">✍️ Text → Sign</div>
+  <div class="section-desc">Convert text to sign language frames with emotion analysis.</div>
+  <div class="card">
+    <div class="form-group"><label>Text</label><textarea id="t2s-text">Hello, how are you? I am happy to meet you today.</textarea></div>
+    <div class="row">
+      <div class="form-group"><label>Sign Language</label><select id="t2s-lang"><option value="ASL">ASL</option><option value="PSL">PSL</option></select></div>
+      <div class="form-group"><label>Include Emotion</label><select id="t2s-emotion"><option value="true">Yes</option><option value="false">No</option></select></div>
+    </div>
+    <button class="btn btn-primary" onclick="doTextToSign()">Translate →</button>
+    <div style="margin-top:16px"><label>Sign Frames</label><div class="sign-frames" id="t2s-frames"><span style="color:var(--muted);font-size:12px">Frames will appear here...</span></div></div>
+    <div id="t2s-emotion-box" style="margin-top:10px"></div>
+    <div class="response-box" id="t2s-response">Awaiting request...</div>
+  </div>
+</div>
+
+<!-- SIGN TO TEXT -->
+<div class="panel" id="panel-sign2text">
+  <div class="section-title">📹 Sign → Text</div>
+  <div class="section-desc">Upload a sign language video to get recognized text + emotion.</div>
+  <div class="card">
+    <div class="form-group"><label>Video File</label><input type="file" id="s2t-video" accept="video/*"></div>
+    <div class="row">
+      <div class="form-group"><label>Sign Language</label><select id="s2t-lang"><option value="ASL">ASL</option><option value="PSL">PSL</option></select></div>
+      <div class="form-group"><label>Detect Emotion</label><select id="s2t-emotion"><option value="true">Yes</option><option value="false">No</option></select></div>
+    </div>
+    <button class="btn btn-primary" onclick="doSignToText()">Upload & Recognize →</button>
+    <div class="live-result" id="s2t-result"><div style="color:var(--muted);font-size:12px">Result will appear here...</div></div>
+    <div class="response-box" id="s2t-response">Awaiting request...</div>
+  </div>
+</div>
+
+<!-- SPEECH TO TEXT -->
+<div class="panel" id="panel-stt">
+  <div class="section-title">🎤 Speech → Text</div>
+  <div class="section-desc">Upload an audio file to get transcription + sentiment.</div>
+  <div class="card">
+    <div class="form-group"><label>Audio File (mp3, wav, webm, ogg)</label><input type="file" id="stt-audio" accept="audio/*"></div>
+    <div class="row">
+      <div class="form-group"><label>Language</label><select id="stt-lang"><option value="en">English</option><option value="ur">Urdu</option></select></div>
+      <div class="form-group"><label>Include Sentiment</label><select id="stt-sentiment"><option value="true">Yes</option><option value="false">No</option></select></div>
+    </div>
+    <button class="btn btn-primary" onclick="doSpeechToText()">Transcribe →</button>
+    <div class="live-result" id="stt-result"><div style="color:var(--muted);font-size:12px">Transcription here...</div></div>
+    <div class="response-box" id="stt-response">Awaiting request...</div>
+  </div>
+</div>
+
+<!-- TEXT TO SPEECH -->
+<div class="panel" id="panel-tts">
+  <div class="section-title">🔊 Text → Speech</div>
+  <div class="section-desc">Convert text to audio and play it directly.</div>
+  <div class="card">
+    <div class="form-group"><label>Text to speak</label><textarea id="tts-text">Hello! I am EmotiSign. I help bridge communication between hearing and deaf communities.</textarea></div>
+    <div class="row">
+      <div class="form-group"><label>Language</label><select id="tts-lang"><option value="en">English</option><option value="ur">Urdu</option></select></div>
+      <div class="form-group"><label>Voice</label><select id="tts-voice"><option value="female">Female</option><option value="male">Male</option></select></div>
+    </div>
+    <button class="btn btn-primary" onclick="doTextToSpeech()">Generate Audio →</button>
+    <div id="tts-player" style="margin-top:14px;display:none">
+      <label>Generated Audio</label>
+      <audio id="tts-audio-el" controls style="width:100%;margin-top:6px;border-radius:7px;background:var(--surface2)"></audio>
+    </div>
+    <div class="response-box" id="tts-response">Awaiting request...</div>
+  </div>
+</div>
+
+<!-- LIVE SIGN TO TEXT -->
+<div class="panel" id="panel-live-sign">
+  <div class="section-title">⚡ Live Sign → Text</div>
+  <div class="section-desc">Stream webcam frames via WebSocket and get live sign recognition.</div>
+  <div class="card">
+    <div class="webcam-grid">
+      <div>
+        <label style="margin-bottom:7px;display:block">Webcam</label>
+        <div class="webcam-container">
+          <video id="webcam-video" autoplay muted playsinline></video>
+          <div class="webcam-overlay" id="webcam-overlay"><span style="font-size:28px">📷</span><span>Camera not started</span></div>
+          <div class="recording-indicator" id="rec-indicator"><div class="rec-dot"></div>LIVE</div>
+        </div>
+        <canvas id="webcam-canvas"></canvas>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="btn btn-outline btn-sm" onclick="startWebcam()">📷 Camera</button>
+          <button class="btn btn-success btn-sm" id="btn-start-stream" onclick="startSignStream()" disabled>⚡ Stream</button>
+          <button class="btn btn-danger btn-sm" id="btn-stop-stream" onclick="stopSignStream()" disabled>⏹ Stop</button>
+        </div>
+        <div class="form-group" style="margin-top:10px"><label>Sign Language</label><select id="live-sign-lang"><option value="ASL">ASL</option><option value="PSL">PSL</option></select></div>
+      </div>
+      <div>
+        <label>Live Result</label>
+        <div class="live-result">
+          <div class="result-text partial" id="live-sign-text">Start streaming...</div>
+          <div id="live-sign-confidence" style="display:none">
+            <div style="display:flex;justify-content:space-between;font-size:10px;font-family:var(--mono);color:var(--muted);margin-bottom:3px"><span>Confidence</span><span id="live-conf-val">0%</span></div>
+            <div class="confidence-bar"><div class="confidence-fill" id="conf-fill" style="width:0%"></div></div>
+          </div>
+          <div id="live-sign-emotion"></div>
+        </div>
+        <label style="margin-top:14px;margin-bottom:6px;display:block">WebSocket Log</label>
+        <div class="ws-log" id="live-sign-log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LIVE TEXT TO SIGN -->
+<div class="panel" id="panel-live-text">
+  <div class="section-title">⚡ Live Text → Sign</div>
+  <div class="section-desc">Send text and watch sign frames stream back word-by-word.</div>
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="form-group"><label>Text to sign</label><textarea id="live-t2s-text" rows="3">Hello how are you today</textarea></div>
+        <div class="form-group"><label>Sign Language</label><select id="live-t2s-lang"><option value="ASL">ASL</option><option value="PSL">PSL</option></select></div>
+        <div class="btn-row">
+          <button class="btn btn-success btn-sm" onclick="connectT2S()" id="btn-live-t2s">⚡ Connect</button>
+          <button class="btn btn-primary btn-sm" onclick="sendLiveT2S()" id="btn-send-t2s" disabled>Send Text</button>
+          <button class="btn btn-danger btn-sm" onclick="disconnectT2S()" id="btn-disc-t2s" disabled>Disconnect</button>
+        </div>
+      </div>
+      <div>
+        <label>Streaming Sign Frames</label>
+        <div class="sign-frames" id="live-sign-frames" style="min-height:90px"><span style="color:var(--muted);font-size:12px">Connect then send text...</span></div>
+        <div id="live-t2s-emotion" style="margin-top:10px"></div>
+      </div>
+    </div>
+    <label style="margin-top:14px;margin-bottom:6px;display:block">WebSocket Log</label>
+    <div class="ws-log" id="live-t2s-log"></div>
+  </div>
+</div>
+
+<!-- LIVE SPEECH TO TEXT -->
+<div class="panel" id="panel-live-stt">
+  <div class="section-title">⚡ Live Speech → Text</div>
+  <div class="section-desc">Stream microphone audio and get live transcription with sentiment.</div>
+  <div class="card">
+    <div class="webcam-grid">
+      <div>
+        <label style="margin-bottom:7px;display:block">Microphone Input</label>
+        <div class="audio-viz" id="audio-viz">
+          <div class="viz-bar" id="v1"></div><div class="viz-bar" id="v2"></div>
+          <div class="viz-bar" id="v3"></div><div class="viz-bar" id="v4"></div>
+          <div class="viz-bar" id="v5"></div><div class="viz-bar" id="v6"></div>
+          <div class="viz-bar" id="v7"></div><div class="viz-bar" id="v8"></div>
+        </div>
+        <div class="form-group" style="margin-top:12px"><label>Language</label><select id="live-stt-lang"><option value="en">English</option><option value="ur">Urdu</option></select></div>
+        <div class="btn-row" style="margin-top:4px">
+          <button class="btn btn-success" onclick="startLiveSTT()" id="btn-start-stt">🎙️ Start</button>
+          <button class="btn btn-danger" onclick="stopLiveSTT()" id="btn-stop-stt" disabled>⏹ Stop</button>
+        </div>
+      </div>
+      <div>
+        <label>Live Transcription</label>
+        <div class="live-result">
+          <div class="result-text partial" id="live-stt-text">Start recording...</div>
+          <div id="live-stt-emotion"></div>
+        </div>
+        <label style="margin-top:14px;margin-bottom:6px;display:block">WebSocket Log</label>
+        <div class="ws-log" id="live-stt-log"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div class="panel" id="panel-chat">
+  <div class="section-title">💬 Real-Time Chat</div>
+  <div class="section-desc">WebSocket chat with auto sign translation and emotion detection.</div>
+  <div class="card">
+    <div class="row">
+      <div>
+        <div class="form-group"><label>Room ID</label><input id="chat-room-id" value="1" placeholder="Room ID"></div>
+        <div class="btn-row">
+          <button class="btn btn-outline btn-sm" onclick="createChatRoom()">+ Create Room</button>
+          <button class="btn btn-success btn-sm" onclick="connectChat()" id="btn-connect-chat">Connect</button>
+          <button class="btn btn-danger btn-sm" onclick="disconnectChat()" id="btn-disc-chat" disabled>Disconnect</button>
+        </div>
+      </div>
+      <div><div style="font-size:11px;color:var(--muted);font-family:var(--mono)">Online Users</div><div id="online-users" style="font-size:13px;margin-top:5px;color:var(--accent3)">—</div></div>
+    </div>
+    <hr class="divider">
+    <div class="chat-box" id="chat-box"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChatMsg()">
+      <button class="btn btn-primary btn-sm" onclick="sendChatMsg()">Send</button>
+    </div>
+    <label style="margin-top:14px;margin-bottom:6px;display:block">WebSocket Log</label>
+    <div class="ws-log" id="chat-log"></div>
+  </div>
+</div>
+
+<!-- PROFILE -->
+<div class="panel" id="panel-profile">
+  <div class="section-title">👤 Profile & Logout</div>
+  <div class="section-desc">View profile, update details, or logout.</div>
+  <div class="row">
+    <div class="card">
+      <div class="card-header"><div class="card-icon" style="background:rgba(255,107,157,.15)">👤</div><div><div class="card-title">Get My Profile</div></div></div>
+      <button class="btn btn-primary" onclick="getProfile()">GET /api/auth/me</button>
+      <div class="response-box" id="profile-response">Awaiting request...</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-icon" style="background:rgba(108,99,255,.15)">✏️</div><div><div class="card-title">Update Profile</div></div></div>
+      <div class="form-group"><label>Full Name</label><input id="upd-name" placeholder="New full name"></div>
+      <div class="form-group"><label>Preferred Sign Language</label><select id="upd-lang"><option value="ASL">ASL</option><option value="PSL">PSL</option></select></div>
+      <button class="btn btn-primary" onclick="updateProfile()">Update →</button>
+      <div class="response-box" id="update-response">Awaiting request...</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-icon" style="background:rgba(255,71,87,.15)">🚪</div><div><div class="card-title">Logout</div></div></div>
+    <button class="btn btn-danger" onclick="doLogout()">Logout</button>
+    <div class="response-box" id="logout-response">Awaiting request...</div>
+  </div>
+</div>
+
+</main>
+</div>
+</div>
+<div id="toast-container"></div>
+
+<script>
+// ── State ──
+let token = '';
+let wsSignStream = null, wsT2S = null, wsSTT = null, wsChat = null;
+let webcamStream = null, frameInterval = null;
+let micStream = null, mediaRecorder = null, audioCtx = null, analyser = null, vizInterval = null;
+
+// Since this page is served from FastAPI itself, base URL is always same origin
+const BASE = '';  // empty = same origin, so fetch('/api/...') works perfectly
+
+// ── Navigation ──
+function showPanel(el, id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  el.classList.add('active');
+}
+
+// ── Helpers ──
+function toast(msg, type='success') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${type==='success'?'✅':'❌'}</span> ${msg}`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+function setResponse(id, data, isError=false) {
+  const el = document.getElementById(id);
+  el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  el.className = 'response-box ' + (isError ? 'error' : 'success');
+}
+
+async function api(method, path, body, isForm=false) {
+  try {
+    const opts = { method, headers: {} };
+    if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+    if (body && !isForm) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+    if (body && isForm) opts.body = body;
+    const res = await fetch(BASE + path, opts);
+    const json = await res.json().catch(() => ({ detail: 'No JSON response' }));
+    return { ok: res.ok, status: res.status, data: json };
+  } catch(e) {
+    return { ok: false, status: 0, data: { detail: 'Network error: ' + e.message } };
+  }
+}
+
+function wsLog(logId, type, msg) {
+  const el = document.getElementById(logId);
+  if (!el) return;
+  const time = new Date().toTimeString().slice(0,8);
+  const div = document.createElement('div');
+  div.className = 'log-entry';
+  div.innerHTML = `<span class="log-time">${time}</span><span class="log-${type}">${msg}</span>`;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function emotionBadge(emotion, sentiment) {
+  const colors = { happy:'#00d4aa',sad:'#6c63ff',angry:'#ff4757',surprised:'#ffb347',fearful:'#a29bfe',disgusted:'#fd79a8',neutral:'#6b6b8a' };
+  const emojis = { happy:'😊',sad:'😢',angry:'😠',surprised:'😲',fearful:'😨',disgusted:'🤢',neutral:'😐' };
+  const c = colors[emotion] || '#6b6b8a';
+  return `<div class="emotion-badge" style="background:${c}20;border:1px solid ${c}40;color:${c}">${emojis[emotion]||'🎭'} ${emotion}${sentiment ? ' · '+sentiment : ''}</div>`;
+}
+
+function wsUrl(path) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${location.host}${path}`;
+}
+
+// ── Server health ──
+async function checkServer() {
+  try {
+    const r = await fetch('/health', { signal: AbortSignal.timeout(3000) });
+    const dot = document.getElementById('server-dot');
+    const st = document.getElementById('server-status');
+    if (r.ok) { dot.className='status-dot online'; st.textContent='online'; st.style.color='var(--success)'; }
+    else { dot.className='status-dot offline'; st.textContent='error'; st.style.color='var(--error)'; }
+  } catch { document.getElementById('server-dot').className='status-dot offline'; document.getElementById('server-status').textContent='offline'; }
+}
+checkServer();
+setInterval(checkServer, 10000);
+
+// ── AUTH ──
+async function doRegister() {
+  const r = await api('POST', '/api/auth/register', {
+    username: document.getElementById('reg-username').value,
+    email: document.getElementById('reg-email').value,
+    password: document.getElementById('reg-password').value,
+    full_name: document.getElementById('reg-fullname').value,
+    role: document.getElementById('reg-role').value,
+    preferred_sign_language: document.getElementById('reg-lang').value,
+  });
+  setResponse('reg-response', r.data, !r.ok);
+  r.ok ? toast('Registered! Now login.') : toast(r.data.detail || 'Failed', 'error');
+}
+
+async function doLogin() {
+  const form = new FormData();
+  form.append('username', document.getElementById('login-username').value);
+  form.append('password', document.getElementById('login-password').value);
+  const r = await api('POST', '/api/auth/login', form, true);
+  setResponse('login-response', r.data, !r.ok);
+  if (r.ok) {
+    token = r.data.access_token;
+    document.getElementById('token-display').textContent = token;
+    document.getElementById('auth-status').textContent = '✅ ' + (r.data.user?.username || 'logged in');
+    document.getElementById('auth-status').style.color = 'var(--success)';
+    toast('Logged in as ' + r.data.user?.username);
+  } else { toast(r.data.detail || 'Login failed', 'error'); }
+}
+
+function copyToken() {
+  if (!token) return;
+  navigator.clipboard.writeText(token).then(() => toast('Token copied!'));
+}
+
+async function doLogout() {
+  const r = await api('POST', '/api/auth/logout');
+  setResponse('logout-response', r.data, !r.ok);
+  token = '';
+  document.getElementById('token-display').textContent = 'Logged out';
+  document.getElementById('auth-status').textContent = 'not logged in';
+  document.getElementById('auth-status').style.color = 'var(--muted)';
+  toast('Logged out');
+}
+
+async function getProfile() {
+  const r = await api('GET', '/api/auth/me');
+  setResponse('profile-response', r.data, !r.ok);
+}
+
+async function updateProfile() {
+  const r = await api('PATCH', '/api/auth/me', {
+    full_name: document.getElementById('upd-name').value || undefined,
+    preferred_sign_language: document.getElementById('upd-lang').value,
+  });
+  setResponse('update-response', r.data, !r.ok);
+  r.ok && toast('Profile updated!');
+}
+
+// ── TEXT TO SIGN REST ──
+async function doTextToSign() {
+  const r = await api('POST', '/api/translate/text-to-sign', {
+    text: document.getElementById('t2s-text').value,
+    sign_language: document.getElementById('t2s-lang').value,
+    include_emotion: document.getElementById('t2s-emotion').value === 'true',
+  });
+  setResponse('t2s-response', r.data, !r.ok);
+  if (!r.ok) { toast(r.data.detail || 'Failed', 'error'); return; }
+  const framesEl = document.getElementById('t2s-frames');
+  framesEl.innerHTML = '';
+  for (const sign of (r.data.signs || [])) {
+    for (const frame of (sign.frames || [])) {
+      const el = document.createElement('div');
+      el.className = 'sign-char'; el.title = sign.word; el.textContent = frame.toUpperCase();
+      framesEl.appendChild(el);
+    }
+    const sep = document.createElement('div');
+    sep.style.cssText = 'width:1px;height:40px;background:var(--border);margin:0 3px';
+    framesEl.appendChild(sep);
+  }
+  if (r.data.emotion_analysis) {
+    const ea = r.data.emotion_analysis;
+    document.getElementById('t2s-emotion-box').innerHTML = emotionBadge(ea.emotion, ea.sentiment_label) +
+      `<div style="font-size:11px;color:var(--muted);margin-top:6px;font-family:var(--mono)">Score: ${ea.sentiment_score?.toFixed(3)}</div>`;
+  }
+  toast('Translated! ' + (r.data.signs?.length || 0) + ' words');
+}
+
+// ── SIGN TO TEXT REST ──
+async function doSignToText() {
+  const file = document.getElementById('s2t-video').files[0];
+  if (!file) { toast('Select a video file', 'error'); return; }
+  const form = new FormData();
+  form.append('video', file);
+  form.append('sign_language', document.getElementById('s2t-lang').value);
+  form.append('detect_emotion', document.getElementById('s2t-emotion').value);
+  const r = await api('POST', '/api/translate/sign-to-text', form, true);
+  setResponse('s2t-response', r.data, !r.ok);
+  if (!r.ok) { toast(r.data.detail || 'Failed', 'error'); return; }
+  document.getElementById('s2t-result').innerHTML = `
+    <div class="result-text">"${r.data.recognized_text}"</div>
+    <div style="font-size:11px;font-family:var(--mono);color:var(--muted)">Confidence: ${(r.data.confidence*100).toFixed(1)}% · Glosses: ${r.data.glosses?.join(', ')}</div>
+    ${r.data.emotion_from_video ? emotionBadge(r.data.emotion_from_video.emotion, null) : ''}`;
+  toast('Sign recognized!');
+}
+
+// ── SPEECH TO TEXT REST ──
+async function doSpeechToText() {
+  const file = document.getElementById('stt-audio').files[0];
+  if (!file) { toast('Select an audio file', 'error'); return; }
+  const form = new FormData();
+  form.append('audio', file);
+  form.append('language', document.getElementById('stt-lang').value);
+  form.append('include_sentiment', document.getElementById('stt-sentiment').value);
+  const r = await api('POST', '/api/speech/speech-to-text', form, true);
+  setResponse('stt-response', r.data, !r.ok);
+  if (!r.ok) { toast(r.data.detail || 'Failed', 'error'); return; }
+  document.getElementById('stt-result').innerHTML = `
+    <div class="result-text">"${r.data.recognized_text}"</div>
+    <div style="font-size:11px;font-family:var(--mono);color:var(--muted)">Confidence: ${(r.data.confidence*100).toFixed(1)}%</div>
+    ${r.data.sentiment ? emotionBadge(r.data.sentiment.emotion, r.data.sentiment.sentiment_label) : ''}`;
+  toast('Transcription complete!');
+}
+
+// ── TEXT TO SPEECH REST ──
+async function doTextToSpeech() {
+  const form = new FormData();
+  form.append('text', document.getElementById('tts-text').value);
+  form.append('language', document.getElementById('tts-lang').value);
+  form.append('voice', document.getElementById('tts-voice').value);
+  const r = await api('POST', '/api/speech/text-to-speech', form, true);
+  setResponse('tts-response', r.data, !r.ok);
+  if (!r.ok) { toast(r.data.detail || 'Failed', 'error'); return; }
+  document.getElementById('tts-audio-el').src = r.data.audio_url;
+  document.getElementById('tts-player').style.display = 'block';
+  toast('Audio generated!');
+}
+
+// ── LIVE SIGN TO TEXT (WebSocket + Webcam) ──
+async function startWebcam() {
+  try {
+    webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    document.getElementById('webcam-video').srcObject = webcamStream;
+    document.getElementById('webcam-overlay').style.display = 'none';
+    document.getElementById('btn-start-stream').disabled = false;
+    toast('Camera started!');
+  } catch(e) { toast('Camera denied: ' + e.message, 'error'); }
+}
+
+function startSignStream() {
+  if (!token) { toast('Login first!', 'error'); return; }
+  if (!webcamStream) { toast('Start camera first!', 'error'); return; }
+  wsSignStream = new WebSocket(wsUrl('/ws/translate/sign-to-text?token=' + token));
+  wsSignStream.onopen = () => {
+    wsLog('live-sign-log', 'sys', '🟢 Connected');
+    wsSignStream.send(JSON.stringify({ type: 'config', sign_language: document.getElementById('live-sign-lang').value, detect_emotion: true }));
+    document.getElementById('btn-start-stream').disabled = true;
+    document.getElementById('btn-stop-stream').disabled = false;
+    document.getElementById('rec-indicator').style.display = 'flex';
+    const video = document.getElementById('webcam-video');
+    const canvas = document.getElementById('webcam-canvas');
+    canvas.width = 320; canvas.height = 240;
+    const ctx = canvas.getContext('2d');
+    frameInterval = setInterval(() => {
+      ctx.drawImage(video, 0, 0, 320, 240);
+      const b64 = canvas.toDataURL('image/jpeg', 0.6);
+      if (wsSignStream?.readyState === WebSocket.OPEN)
+        wsSignStream.send(JSON.stringify({ type: 'frame', data: b64, mime: 'image/jpeg' }));
+    }, 100);
+  };
+  wsSignStream.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.event === 'status') return;
+    wsLog('live-sign-log', 'in', `← ${msg.event}: ${JSON.stringify(msg.data).slice(0,70)}`);
+    if (msg.event === 'result' || msg.event === 'partial') {
+      const d = msg.data;
+      const el = document.getElementById('live-sign-text');
+      el.textContent = '"' + d.recognized_text + '"';
+      el.className = 'result-text' + (d.is_partial ? ' partial' : '');
+      if (d.confidence) {
+        document.getElementById('live-sign-confidence').style.display = 'block';
+        document.getElementById('live-conf-val').textContent = (d.confidence*100).toFixed(1)+'%';
+        document.getElementById('conf-fill').style.width = (d.confidence*100)+'%';
+      }
+      if (d.emotion) document.getElementById('live-sign-emotion').innerHTML = emotionBadge(d.emotion, null);
+    }
+  };
+  wsSignStream.onerror = () => wsLog('live-sign-log', 'err', '❌ Error');
+  wsSignStream.onclose = () => { wsLog('live-sign-log', 'sys', '🔴 Disconnected'); document.getElementById('rec-indicator').style.display = 'none'; };
+}
+
+function stopSignStream() {
+  if (wsSignStream) { wsSignStream.send(JSON.stringify({ type: 'stop' })); wsSignStream.close(); }
+  if (frameInterval) clearInterval(frameInterval);
+  document.getElementById('btn-start-stream').disabled = false;
+  document.getElementById('btn-stop-stream').disabled = true;
+}
+
+// ── LIVE TEXT TO SIGN (WebSocket) ──
+function connectT2S() {
+  if (!token) { toast('Login first!', 'error'); return; }
+  wsT2S = new WebSocket(wsUrl('/ws/translate/text-to-sign?token=' + token));
+  wsT2S.onopen = () => {
+    wsLog('live-t2s-log', 'sys', '🟢 Connected');
+    document.getElementById('btn-send-t2s').disabled = false;
+    document.getElementById('btn-disc-t2s').disabled = false;
+    document.getElementById('btn-live-t2s').disabled = true;
+    toast('Connected! Send text.');
+  };
+  wsT2S.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.event === 'status') return;
+    wsLog('live-t2s-log', 'in', `← ${msg.event}: ${JSON.stringify(msg.data).slice(0,70)}`);
+    if (msg.event === 'sign_start') document.getElementById('live-sign-frames').innerHTML = '';
+    if (msg.event === 'sign_frame') {
+      document.querySelectorAll('#live-sign-frames .sign-char').forEach(el => el.classList.remove('active'));
+      const el = document.createElement('div');
+      el.className = 'sign-char active'; el.title = msg.data.word; el.textContent = msg.data.frame.toUpperCase();
+      document.getElementById('live-sign-frames').appendChild(el);
+      setTimeout(() => el.classList.remove('active'), 300);
+    }
+    if (msg.event === 'emotion') document.getElementById('live-t2s-emotion').innerHTML = emotionBadge(msg.data.emotion, msg.data.sentiment_label);
+  };
+  wsT2S.onerror = () => wsLog('live-t2s-log', 'err', '❌ Error');
+  wsT2S.onclose = () => { wsLog('live-t2s-log', 'sys', '🔴 Disconnected'); document.getElementById('btn-live-t2s').disabled = false; document.getElementById('btn-send-t2s').disabled = true; document.getElementById('btn-disc-t2s').disabled = true; };
+}
+
+function sendLiveT2S() {
+  if (!wsT2S || wsT2S.readyState !== WebSocket.OPEN) { toast('Not connected', 'error'); return; }
+  const text = document.getElementById('live-t2s-text').value;
+  wsT2S.send(JSON.stringify({ type: 'translate', text, sign_language: document.getElementById('live-t2s-lang').value, include_emotion: true }));
+  wsLog('live-t2s-log', 'out', `→ translate: "${text}"`);
+}
+
+function disconnectT2S() { if (wsT2S) wsT2S.close(); }
+
+// ── LIVE SPEECH TO TEXT (WebSocket + Mic) ──
+async function startLiveSTT() {
+  if (!token) { toast('Login first!', 'error'); return; }
+  try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch(e) { toast('Mic denied', 'error'); return; }
+  audioCtx = new AudioContext();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  audioCtx.createMediaStreamSource(micStream).connect(analyser);
+  const dataArr = new Uint8Array(analyser.frequencyBinCount);
+  const bars = ['v1','v2','v3','v4','v5','v6','v7','v8'].map(id => document.getElementById(id));
+  vizInterval = setInterval(() => {
+    analyser.getByteFrequencyData(dataArr);
+    bars.forEach((bar, i) => { bar.style.height = Math.max(4, dataArr[i*4]/3) + 'px'; });
+  }, 80);
+
+  const lang = document.getElementById('live-stt-lang').value;
+  wsSTT = new WebSocket(wsUrl(`/ws/speech/live-stt?token=${token}&language=${lang}`));
+  wsSTT.onopen = () => {
+    wsLog('live-stt-log', 'sys', '🟢 Connected');
+    document.getElementById('btn-start-stt').disabled = true;
+    document.getElementById('btn-stop-stt').disabled = false;
+    mediaRecorder = new MediaRecorder(micStream, { mimeType: 'audio/webm' });
+    mediaRecorder.ondataavailable = async (e) => {
+      if (e.data.size > 0 && wsSTT?.readyState === WebSocket.OPEN) {
+        const buf = await e.data.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        wsSTT.send(JSON.stringify({ type: 'chunk', data: b64, mime: 'audio/webm' }));
+      }
+    };
+    mediaRecorder.start(250);
+    toast('Recording started!');
+  };
+  wsSTT.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.event === 'status' || msg.event === 'pong') return;
+    wsLog('live-stt-log', 'in', `← ${msg.event}: ${JSON.stringify(msg.data).slice(0,70)}`);
+    if (msg.event === 'partial') { document.getElementById('live-stt-text').textContent = msg.data.text + '...'; document.getElementById('live-stt-text').className = 'result-text partial'; }
+    if (msg.event === 'final') { document.getElementById('live-stt-text').textContent = '"' + msg.data.text + '"'; document.getElementById('live-stt-text').className = 'result-text'; }
+    if (msg.event === 'sentiment') document.getElementById('live-stt-emotion').innerHTML = emotionBadge(msg.data.emotion, msg.data.sentiment_label);
+  };
+  wsSTT.onerror = () => wsLog('live-stt-log', 'err', '❌ Error');
+  wsSTT.onclose = () => wsLog('live-stt-log', 'sys', '🔴 Disconnected');
+}
+
+function stopLiveSTT() {
+  if (mediaRecorder) mediaRecorder.stop();
+  if (wsSTT) { wsSTT.send(JSON.stringify({ type: 'stop' })); wsSTT.close(); }
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (vizInterval) clearInterval(vizInterval);
+  if (audioCtx) audioCtx.close();
+  document.getElementById('btn-start-stt').disabled = false;
+  document.getElementById('btn-stop-stt').disabled = true;
+  ['v1','v2','v3','v4','v5','v6','v7','v8'].forEach(id => document.getElementById(id).style.height = '4px');
+  toast('Recording stopped');
+}
+
+// ── CHAT (WebSocket) ──
+async function createChatRoom() {
+  if (!token) { toast('Login first!', 'error'); return; }
+  const r = await api('POST', '/api/chat/rooms', { name: 'Test Room', member_ids: [], is_direct: false });
+  if (r.ok) { document.getElementById('chat-room-id').value = r.data.id; toast('Room ' + r.data.id + ' created!'); }
+  else toast(r.data.detail || 'Failed', 'error');
+}
+
+function connectChat() {
+  if (!token) { toast('Login first!', 'error'); return; }
+  const roomId = document.getElementById('chat-room-id').value;
+  wsChat = new WebSocket(wsUrl(`/api/chat/ws/chat/${roomId}?token=${token}`));
+  wsChat.onopen = () => { wsLog('chat-log','sys','🟢 Connected to room '+roomId); document.getElementById('btn-connect-chat').disabled=true; document.getElementById('btn-disc-chat').disabled=false; toast('Joined room '+roomId); };
+  wsChat.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    wsLog('chat-log', 'in', `← ${msg.event}`);
+    if (msg.event === 'message') {
+      const d = msg.data;
+      const box = document.getElementById('chat-box');
+      const el = document.createElement('div');
+      el.className = 'chat-msg received';
+      el.innerHTML = `<div>${d.text_content||'[sign video]'}</div>${d.emotion?`<div style="font-size:9px;margin-top:3px;opacity:.7">${d.emotion}·${d.sentiment_label||''}</div>`:''}<div class="meta">${d.sender_username||'user'}·${new Date(d.created_at).toTimeString().slice(0,8)}</div>`;
+      box.appendChild(el); box.scrollTop = box.scrollHeight;
+    }
+    if (msg.event === 'online_users') document.getElementById('online-users').textContent = msg.data.users.length + ' online';
+    if (msg.event === 'typing') wsLog('chat-log','sys','✏️ someone is typing...');
+  };
+  wsChat.onerror = () => wsLog('chat-log','err','❌ Error');
+  wsChat.onclose = () => { wsLog('chat-log','sys','🔴 Disconnected'); document.getElementById('btn-connect-chat').disabled=false; document.getElementById('btn-disc-chat').disabled=true; };
+}
+
+function sendChatMsg() {
+  if (!wsChat || wsChat.readyState !== WebSocket.OPEN) { toast('Connect to chat first!', 'error'); return; }
+  const content = document.getElementById('chat-input').value.trim();
+  if (!content) return;
+  wsChat.send(JSON.stringify({ type: 'text', content, auto_translate: true }));
+  const box = document.getElementById('chat-box');
+  const el = document.createElement('div');
+  el.className = 'chat-msg sent';
+  el.innerHTML = `<div>${content}</div><div class="meta">you·${new Date().toTimeString().slice(0,8)}</div>`;
+  box.appendChild(el); box.scrollTop = box.scrollHeight;
+  document.getElementById('chat-input').value = '';
+  wsLog('chat-log','out',`→ "${content}"`);
+}
+
+function disconnectChat() { if (wsChat) wsChat.close(); }
+</script>
+</body>
+</html>
