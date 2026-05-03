@@ -2,46 +2,42 @@
 # Install with: pip install -r requirements.txt
 
 # Web framework
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
+fastapi
+uvicorn[standard]
 
 # File uploads (multipart/form-data)
-python-multipart==0.0.12
+python-multipart
 
 # JWT authentication
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]
 
 # Password hashing
-passlib[bcrypt]==1.7.4
-bcrypt==4.2.1
+passlib[bcrypt]
+bcrypt
 
 # Database (async SQLite)
-sqlalchemy==2.0.36
-aiosqlite==0.20.0
+sqlalchemy
+aiosqlite
 
 # Pydantic v2 + settings
-pydantic[email]==2.10.3
-pydantic-settings==2.6.1
+pydantic[email]
+pydantic-settings
 
 # Async file I/O
-aiofiles==24.1.0
+aiofiles
 
 # ML Dependencies for WLASL-100 Model
 # NumPy - MUST be installed first for compatibility
-numpy==1.26.4
+numpy
 
 # PyTorch (CPU version - for GPU, see README)
-torch==2.0.1
-torchvision==0.15.2
+torch
+torchvision
 
-# MediaPipe for keypoint extraction (updated for numpy 1.26 compatibility)
-mediapipe==0.10.14
+# MediaPipe for keypoint extraction 
+mediapipe
 
-# OpenCV for video processing (updated for numpy 1.26 compatibility)
-opencv-python==4.10.0.84
+# OpenCV for video processing 
+opencv-python
 
-# Testing dependencies
-pytest==7.4.3
-pytest-asyncio==0.21.1
-pytest-cov==4.1.0
-requests==2.31.0
+
