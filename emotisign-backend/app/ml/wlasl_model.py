@@ -200,10 +200,10 @@ class SignLanguageTransformer(nn.Module):
         """
         Load model from checkpoint file.
 
-        Uses weights_only=True (safe context) to prevent arbitrary code
-        execution from untrusted checkpoint files. Falls back to
-        weights_only=False only if the checkpoint contains non-tensor
-        objects (e.g. config dicts saved with older PyTorch versions).
+        Safe loading strategy for PyTorch 2.0–2.6+:
+        - Registers Python builtins (dict, list, int, float, str) as safe globals
+          so weights_only=True works even when the checkpoint contains a config dict.
+        - Falls back to weights_only=False only if registration fails (older PyTorch).
 
         Args:
             checkpoint_path: Path to .pth checkpoint file
@@ -211,16 +211,22 @@ class SignLanguageTransformer(nn.Module):
         Returns:
             Loaded model in eval mode
         """
-        # Try safe load first (weights_only=True — no arbitrary code execution)
+        import torch.serialization as _ts
+
+        # Register the Python types our checkpoint uses so weights_only=True accepts them.
+        # This is the correct PyTorch 2.6 approach instead of disabling safe mode entirely.
+        _safe_types = [dict, list, int, float, str, bool]
         try:
+            for t in _safe_types:
+                _ts.add_safe_globals([t])
             checkpoint = torch.load(
                 checkpoint_path,
                 map_location=device,
                 weights_only=True,
             )
-        except Exception:
-            # Fallback for checkpoints that contain non-tensor objects (config dicts)
-            # Only use with checkpoints you trust (i.e. your own trained weights)
+        except (AttributeError, TypeError):
+            # add_safe_globals not available (PyTorch < 2.0) — fall back to unsafe load
+            # Only safe because this is our own trained checkpoint
             checkpoint = torch.load(
                 checkpoint_path,
                 map_location=device,

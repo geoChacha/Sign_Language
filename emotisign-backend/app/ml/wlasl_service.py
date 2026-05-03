@@ -19,7 +19,7 @@ import asyncio
 import numpy as np
 import cv2
 import torch
-from torch.cuda.amp import autocast
+from torch.amp import autocast
 
 from .wlasl_model import SignLanguageTransformer
 from .keypoint_extractor import KeypointExtractor
@@ -296,7 +296,7 @@ class WLASLModelService:
         # Run inference
         with torch.no_grad():
             if self.device == "cuda":
-                with autocast():
+                with autocast(device_type="cuda"):
                     logits = self.model(x)  # (num_variants, num_classes)
             else:
                 logits = self.model(x)
