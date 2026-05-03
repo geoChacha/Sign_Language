@@ -1,6 +1,9 @@
 # EmotiSign Backend — Pinned dependencies
 # Generated from working venv — install with:
 #   pip install -r requirements.txt
+#
+# Requires Python 3.10.9
+# Download: https://www.python.org/ftp/python/3.10.9/python-3.10.9-amd64.exe
 
 # ── Web framework ─────────────────────────────────────────────
 fastapi==0.115.5

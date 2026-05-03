@@ -14,8 +14,8 @@ Bidirectional sign language communication system with real-time ASL recognition 
 
 ### Prerequisites
 
-- [Python 3.10+](https://python.org/downloads/)
-- [Node.js 18+](https://nodejs.org/)
+- **Python 3.10.9** — the setup script will download and install it automatically if missing
+- [Node.js 18+](https://nodejs.org/) — must be installed manually
 
 ### 1. Clone the repo
 
