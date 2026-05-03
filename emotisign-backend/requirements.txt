@@ -1,43 +1,66 @@
-# EmotiSign Backend — Python 3.9/3.10 compatible
-# Install with: pip install -r requirements.txt
+# EmotiSign Backend — Pinned dependencies
+# Generated from working venv — install with:
+#   pip install -r requirements.txt
 
-# Web framework
-fastapi
-uvicorn[standard]
+# ── Web framework ─────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+starlette==0.41.3
 
-# File uploads (multipart/form-data)
-python-multipart
+# ── File uploads ──────────────────────────────────────────────
+python-multipart==0.0.12
 
-# JWT authentication
-python-jose[cryptography]
+# ── JWT authentication ────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+cryptography==47.0.0
 
-# Password hashing
-passlib[bcrypt]
-bcrypt
+# ── Password hashing ──────────────────────────────────────────
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.1
 
-# Database (async SQLite)
-sqlalchemy
-aiosqlite
+# ── Database (async SQLite) ───────────────────────────────────
+sqlalchemy==2.0.36
+aiosqlite==0.20.0
+greenlet==3.5.0
 
-# Pydantic v2 + settings
-pydantic[email]
-pydantic-settings
+# ── Pydantic v2 + settings ────────────────────────────────────
+pydantic[email]==2.10.3
+pydantic-settings==2.6.1
+pydantic-core==2.27.1
+email-validator==2.3.0
 
-# Async file I/O
-aiofiles
+# ── Async file I/O ────────────────────────────────────────────
+aiofiles==24.1.0
 
-# ML Dependencies for WLASL-100 Model
-# NumPy - MUST be installed first for compatibility
-numpy
+# ── Utilities ─────────────────────────────────────────────────
+python-dotenv==1.2.2
+anyio==4.13.0
 
-# PyTorch (CPU version - for GPU, see README)
-torch
-torchvision
+# ── ML: NumPy (install before torch) ─────────────────────────
+numpy==2.2.6
 
-# MediaPipe for keypoint extraction 
-mediapipe
+# ── ML: PyTorch ───────────────────────────────────────────────
+# CPU build — for GPU use: torch==2.0.1+cu118 torchvision==0.15.2+cu118
+# NOTE: torch 2.0.1 is what's installed and tested in this project.
+# To upgrade to 2.6 for weights_only safe loading, replace with:
+#   torch==2.6.0  torchvision==0.21.0
+torch==2.0.1
+torchvision==0.15.2
 
-# OpenCV for video processing 
-opencv-python
+# ── ML: MediaPipe (keypoint extraction) ──────────────────────
+mediapipe==0.10.14
+absl-py==2.4.0
+flatbuffers==25.12.19
+protobuf==4.25.9
 
+# ── ML: OpenCV (video processing) ────────────────────────────
+opencv-python==4.10.0.84
 
+# ── ML: Matplotlib (sign animation / visualization) ──────────
+matplotlib==3.10.9
+
+# ── Testing ───────────────────────────────────────────────────
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+requests==2.31.0
