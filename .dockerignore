@@ -1,0 +1,36 @@
+# Root .dockerignore — applies when build context is workspace root
+
+# Frontend (built separately)
+emotisign-frontend/node_modules/
+emotisign-frontend/.next/
+
+# Backend venv
+emotisign-backend/venv/
+emotisign-backend/__pycache__/
+emotisign-backend/**/__pycache__/
+emotisign-backend/*.db
+
+# Model Files folder (training scripts, not needed at runtime)
+Model Files/
+Model/
+
+# Kiro / editor
+.kiro/
+.vscode/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+
+# Env files
+.env
+emotisign-backend/.env
+emotisign-frontend/.env.local

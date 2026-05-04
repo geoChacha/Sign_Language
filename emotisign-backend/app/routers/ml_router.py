@@ -219,7 +219,7 @@ async def get_ml_stats(
         "average_inference_time_ms": 287.5,
         "average_confidence": 0.823,
         "model_loaded": true,
-        "device": "cuda"
+        "device": "cpu"
     }
     ```
     """
@@ -239,7 +239,7 @@ async def health_check(
     {
         "status": "healthy",
         "model_loaded": true,
-        "device": "cuda"
+        "device": "cpu"
     }
     ```
     """

@@ -10,7 +10,41 @@ Bidirectional sign language communication system with real-time ASL recognition 
 - **Chat** — Real-time chat with sign language support
 - **Emotion detection** — Sentiment analysis on text and facial expressions from video
 
-## Quick Start (Windows)
+## Quick Start — Docker (Recommended)
+
+### Prerequisites
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+
+### 1. Clone and configure
+
+```bash
+git clone <your-repo-url>
+cd emotisign
+cp .env.docker .env
+# Edit .env and set a strong SECRET_KEY
+```
+
+### 2. Build and start
+
+```bash
+docker compose up --build
+```
+
+- **Frontend** → http://localhost:3000
+- **Backend API** → http://localhost:8000
+- **API Docs** → http://localhost:8000/docs
+
+### 3. Stop
+
+```bash
+docker compose down
+```
+
+Data (database, uploads) is persisted in Docker named volumes across restarts.
+
+---
+
+## Quick Start — Native (Windows)
 
 ### Prerequisites
 
@@ -30,24 +64,13 @@ cd emotisign
 setup.bat
 ```
 
-This will:
-- Create a Python virtual environment and install all dependencies
-- Install Node.js packages for the frontend
-- Create `.env` files from templates
-
 ### 3. Start the app
 
 ```bat
 start.bat
 ```
 
-Opens two terminal windows:
-- **Backend** at http://localhost:8000
-- **Frontend** at http://localhost:3000
-
-### 4. Open in browser
-
-Go to **http://localhost:3000**
+Opens two terminal windows — backend at http://localhost:8000, frontend at http://localhost:3000.
 
 ---
 

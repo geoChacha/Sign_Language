@@ -19,7 +19,6 @@ import asyncio
 import numpy as np
 import cv2
 import torch
-from torch.amp import autocast
 
 from .wlasl_model import SignLanguageTransformer
 from .keypoint_extractor import KeypointExtractor
@@ -45,7 +44,7 @@ class WLASLModelService:
         model_path: str,
         vocab_path: str,
         temperature_path: Optional[str] = None,
-        device: str = "cuda",
+        device: str = "cpu",
         use_tta: bool = True,
         confidence_threshold: float = 0.25,
         num_frames: int = 64,
@@ -293,13 +292,9 @@ class WLASLModelService:
         batch = np.stack(variants, axis=0)  # (num_variants, num_frames, 126)
         x = torch.from_numpy(batch).to(self.device)
         
-        # Run inference
+        # Run inference — CPU only in Docker; autocast only helps on CUDA
         with torch.no_grad():
-            if self.device == "cuda":
-                with autocast(device_type="cuda"):
-                    logits = self.model(x)  # (num_variants, num_classes)
-            else:
-                logits = self.model(x)
+            logits = self.model(x)  # (num_variants, num_classes)
         
         # Average logits across variants
         avg_logits = logits.mean(dim=0, keepdim=True)  # (1, num_classes)
@@ -425,7 +420,8 @@ async def get_wlasl_service() -> WLASLModelService:
             "TEMPERATURE_PATH",
             "app/ml/models/wlasl100/temperature.json"
         )
-        device = os.getenv("ML_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
+        # Always use CPU — GPU not available in Docker container
+        device = os.getenv("ML_DEVICE", "cpu")
         use_tta = os.getenv("USE_TTA", "true").lower() == "true"
         confidence_threshold = float(os.getenv("CONFIDENCE_THRESHOLD", "0.25"))
         

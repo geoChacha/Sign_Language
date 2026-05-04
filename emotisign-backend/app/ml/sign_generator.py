@@ -221,22 +221,26 @@ class SignGenerator:
         if override is not None:
             return Path(override)
 
-        # 2. Environment variable
+        # 2. Environment variable (set in Docker via KEYPOINTS_DIR)
         env_val = os.environ.get("KEYPOINTS_DIR")
         if env_val:
             return Path(env_val)
 
-        # 3. Default: relative to this file's location (most reliable)
-        #    This file is at: emotisign-backend/app/ml/sign_generator.py
-        #    Keypoints are at: Featrure_sign_generation/keypoints_best  (workspace root)
+        # 3. Inside the backend directory (Docker build copies it here)
         this_file = Path(__file__).resolve()
-        # Go up: sign_generator.py -> ml -> app -> emotisign-backend -> workspace root
-        workspace_root = this_file.parent.parent.parent.parent
-        candidate = workspace_root / "Featrure_sign_generation" / "keypoints_best"
+        # sign_generator.py → ml → app → emotisign-backend
+        backend_root = this_file.parent.parent.parent
+        candidate = backend_root / "keypoints_best"
         if candidate.exists():
             return candidate
 
-        # 4. Relative to cwd (legacy fallback)
+        # 4. Workspace root sibling (native dev setup)
+        workspace_root = backend_root.parent
+        candidate2 = workspace_root / "Featrure_sign_generation" / "keypoints_best"
+        if candidate2.exists():
+            return candidate2
+
+        # 5. Relative to cwd (last resort)
         return Path("../Featrure_sign_generation/keypoints_best")
 
     @staticmethod

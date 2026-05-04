@@ -1,0 +1,42 @@
+# Build context: emotisign-backend/
+
+# Virtual environment — reinstalled inside container
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# Database — regenerated at runtime
+*.db
+*.db-shm
+*.db-wal
+
+# Uploads — runtime data, use Docker volumes
+uploads/
+
+# Tests
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+.cursor/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Env files — injected via docker-compose
+.env
+
+# NOTE: keypoints_best/ is NOT excluded — it must be in the image

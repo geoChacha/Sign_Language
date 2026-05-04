@@ -1,9 +1,6 @@
 # EmotiSign Backend — Pinned dependencies
-# Generated from working venv — install with:
-#   pip install -r requirements.txt
-#
 # Requires Python 3.10.9
-# Download: https://www.python.org/ftp/python/3.10.9/python-3.10.9-amd64.exe
+# Install: pip install -r requirements.txt
 
 # ── Web framework ─────────────────────────────────────────────
 fastapi==0.115.5
@@ -15,7 +12,7 @@ python-multipart==0.0.12
 
 # ── JWT authentication ────────────────────────────────────────
 python-jose[cryptography]==3.3.0
-cryptography==47.0.0
+cryptography==42.0.8
 
 # ── Password hashing ──────────────────────────────────────────
 passlib[bcrypt]==1.7.4
@@ -24,43 +21,41 @@ bcrypt==4.2.1
 # ── Database (async SQLite) ───────────────────────────────────
 sqlalchemy==2.0.36
 aiosqlite==0.20.0
-greenlet==3.5.0
+greenlet==3.1.1
 
 # ── Pydantic v2 + settings ────────────────────────────────────
 pydantic[email]==2.10.3
 pydantic-settings==2.6.1
-pydantic-core==2.27.1
-email-validator==2.3.0
+email-validator==2.2.0
 
 # ── Async file I/O ────────────────────────────────────────────
 aiofiles==24.1.0
 
 # ── Utilities ─────────────────────────────────────────────────
-python-dotenv==1.2.2
-anyio==4.13.0
+python-dotenv==1.0.1
+anyio==4.4.0
 
-# ── ML: NumPy (install before torch) ─────────────────────────
-numpy==2.2.6
+# ── ML: NumPy ─────────────────────────────────────────────────
+# MUST stay on 1.x — mediapipe 0.10.14 was compiled against NumPy 1.x ABI
+# NumPy 2.x breaks mediapipe at import time
+numpy==1.26.4
 
-# ── ML: PyTorch ───────────────────────────────────────────────
-# CPU build — for GPU use: torch==2.0.1+cu118 torchvision==0.15.2+cu118
-# NOTE: torch 2.0.1 is what's installed and tested in this project.
-# To upgrade to 2.6 for weights_only safe loading, replace with:
-#   torch==2.6.0  torchvision==0.21.0
+# ── ML: PyTorch (CPU) ─────────────────────────────────────────
+# Installed from PyTorch's own index (see Dockerfile for --extra-index-url)
 torch==2.0.1
 torchvision==0.15.2
 
-# ── ML: MediaPipe (keypoint extraction) ──────────────────────
+# ── ML: MediaPipe ─────────────────────────────────────────────
 mediapipe==0.10.14
-absl-py==2.4.0
-flatbuffers==25.12.19
-protobuf==4.25.9
+absl-py==2.1.0
+flatbuffers==24.3.25
+protobuf==4.25.3
 
-# ── ML: OpenCV (video processing) ────────────────────────────
+# ── ML: OpenCV ────────────────────────────────────────────────
 opencv-python==4.10.0.84
 
-# ── ML: Matplotlib (sign animation / visualization) ──────────
-matplotlib==3.10.9
+# ── ML: Matplotlib ────────────────────────────────────────────
+matplotlib==3.9.2
 
 # ── Testing ───────────────────────────────────────────────────
 pytest==7.4.3

@@ -69,6 +69,10 @@ dmypy.json
 # .pth and .npy files ARE committed so clone-and-run works.
 # Do NOT add *.pth or *.npy to this file.
 
+# keypoints_best is kept in both locations:
+#   Featrure_sign_generation/keypoints_best/  — original source
+#   emotisign-backend/keypoints_best/         — Docker build copy
+
 
 # ── Node.js / Next.js ────────────────────────────────────────
 node_modules/

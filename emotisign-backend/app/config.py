@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     MODEL_PATH: str = "app/ml/models/wlasl100/best_model.pth"
     VOCAB_PATH: str = "app/ml/models/wlasl100/vocab.json"
     TEMPERATURE_PATH: str = "app/ml/models/wlasl100/temperature.json"
-    ML_DEVICE: str = "cuda"
+    ML_DEVICE: str = "cpu"
     USE_TTA: bool = True
     CONFIDENCE_THRESHOLD: float = 0.25
     MAX_VIDEO_DURATION_SEC: int = 30
