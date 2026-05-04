@@ -1,0 +1,70 @@
+version: '3.9'
+
+# ============================================================
+# EmotiSign — Production Docker Compose (pre-built images)
+#
+# No source code needed. Just this file + a .env file.
+#
+# Setup (one time):
+#   1. Create a .env file with your SECRET_KEY:
+#      echo SECRET_KEY=your-random-secret > .env
+#
+# Run:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Stop:
+#   docker compose -f docker-compose.prod.yml down
+#
+# Update to latest images:
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+# ============================================================
+
+services:
+
+  backend:
+    image: ghunsuna01/emotisign-backend:latest
+    container_name: emotisign-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      DATABASE_URL: sqlite+aiosqlite:////app/data/emotisign.db
+      UPLOAD_DIR: uploads/videos
+      MAX_VIDEO_SIZE_MB: 50
+      MAX_VIDEO_DURATION_SEC: 30
+      ML_DEVICE: cpu
+      USE_TTA: "true"
+      CONFIDENCE_THRESHOLD: "0.25"
+      MODEL_PATH: app/ml/models/wlasl100/best_model.pth
+      VOCAB_PATH: app/ml/models/wlasl100/vocab.json
+      TEMPERATURE_PATH: app/ml/models/wlasl100/temperature.json
+      KEYPOINTS_DIR: /app/keypoints_best
+    volumes:
+      - backend_db:/app/data
+      - backend_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  frontend:
+    image: ghunsuna01/emotisign-frontend:latest
+    container_name: emotisign-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  backend_db:
+  backend_uploads:
