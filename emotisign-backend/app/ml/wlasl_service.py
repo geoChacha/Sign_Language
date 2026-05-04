@@ -6,6 +6,12 @@ Provides sign-to-text translation using the WLASL-100 model with:
 - TCN + BiGRU model inference
 - Test-Time Augmentation (TTA) for robustness
 - Temperature scaling for calibrated confidence scores
+
+Performance notes:
+- Video extraction runs in a thread executor to avoid blocking the async event loop
+- Frames are processed one at a time (no full-video RAM load)
+- Resampling uses nearest-neighbor to match training-time dataset.py behaviour
+- TTA is enabled by default for uploaded videos; disable for real-time use
 """
 
 import os
@@ -15,6 +21,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import cv2
@@ -22,6 +29,9 @@ import torch
 
 from .wlasl_model import SignLanguageTransformer
 from .keypoint_extractor import KeypointExtractor
+
+# Thread pool for CPU-bound / blocking work (MediaPipe + OpenCV)
+_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="wlasl_worker")
 
 
 logger = logging.getLogger(__name__)
@@ -117,8 +127,9 @@ class WLASLModelService:
                 logger.info("Using default temperature: 1.0")
             
             # Initialize keypoint extractor
-            self.extractor = KeypointExtractor(model_complexity=2)
-            logger.info("KeypointExtractor initialized")
+            # model_complexity=1 matches 1_extract_keypoints.py used during training
+            self.extractor = KeypointExtractor(model_complexity=1)
+            logger.info("KeypointExtractor initialized (model_complexity=1)")
             
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
@@ -130,8 +141,11 @@ class WLASLModelService:
         target_frames: int = 64
     ) -> np.ndarray:
         """
-        Resample keypoint sequence to target length using linear interpolation.
-        
+        Resample keypoint sequence to target length using nearest-neighbor sampling.
+
+        Matches the behaviour of dataset.py used during training (np.linspace + int cast),
+        which avoids a distribution shift between training and inference.
+
         Args:
             keypoints: Input sequence of shape (num_frames, 126)
             target_frames: Target sequence length (default: 64)
@@ -139,35 +153,22 @@ class WLASLModelService:
             Resampled sequence of shape (target_frames, 126)
         """
         num_frames = keypoints.shape[0]
-        
+
         if num_frames == target_frames:
             return keypoints
-        
+
         if num_frames < target_frames:
-            # Pad by repeating last frame
+            # Pad by repeating last frame (same as training-time padding)
             padding = np.repeat(
                 keypoints[-1:],
                 target_frames - num_frames,
                 axis=0
             )
             return np.vstack([keypoints, padding])
-        
-        # Resample using linear interpolation
-        indices = np.linspace(0, num_frames - 1, target_frames)
-        resampled = np.zeros((target_frames, keypoints.shape[1]), dtype=np.float32)
-        
-        for i, idx in enumerate(indices):
-            idx_floor = int(np.floor(idx))
-            idx_ceil = min(int(np.ceil(idx)), num_frames - 1)
-            
-            if idx_floor == idx_ceil:
-                resampled[i] = keypoints[idx_floor]
-            else:
-                # Linear interpolation
-                weight = idx - idx_floor
-                resampled[i] = (1 - weight) * keypoints[idx_floor] + weight * keypoints[idx_ceil]
-        
-        return resampled
+
+        # Nearest-neighbor resampling — matches training dataset.py
+        indices = np.linspace(0, num_frames - 1, target_frames).astype(int)
+        return keypoints[indices]
     
     def build_tta_variants(self, seq: np.ndarray) -> List[np.ndarray]:
         """
@@ -221,8 +222,11 @@ class WLASLModelService:
     
     async def extract_keypoints_from_video(self, video_path: str) -> np.ndarray:
         """
-        Extract keypoints from video file.
-        
+        Extract keypoints from video file without loading all frames into RAM.
+
+        Frames are decoded and processed one at a time inside a thread executor
+        so the async event loop is never blocked by OpenCV or MediaPipe.
+
         Args:
             video_path: Path to video file
         Returns:
@@ -232,32 +236,53 @@ class WLASLModelService:
         """
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
-        
-        # Open video
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            raise ValueError(f"Cannot open video file: {video_path}")
-        
-        try:
-            frames = []
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                frames.append(frame)
+
+        def _extract_sync() -> np.ndarray:
+            """Blocking extraction — runs in thread pool.
             
-            if len(frames) == 0:
+            Creates its own KeypointExtractor instance because MediaPipe's
+            Holistic object is NOT thread-safe. Sharing one across threads
+            produces corrupted keypoints and random predictions.
+            
+            Uses static_image_mode=True for uploaded videos — re-detects
+            hands every frame instead of tracking, which is more reliable
+            for pre-recorded video files.
+            """
+            # Each thread gets its own extractor — safe for concurrent requests
+            # static_image_mode=False: tracking mode works better for continuous video recordings
+            local_extractor = KeypointExtractor(model_complexity=1, static_image_mode=False)
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                local_extractor.close()
+                raise ValueError(f"Cannot open video file: {video_path}")
+
+            keypoints_list = []
+            frame_idx = 0
+            try:
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    try:
+                        kp = local_extractor.extract_keypoints_from_frame(frame)
+                        keypoints_list.append(kp)
+                    except Exception as e:
+                        logger.warning(f"Frame {frame_idx} extraction failed: {e}")
+                        keypoints_list.append(np.zeros(126, dtype=np.float32))
+                    frame_idx += 1
+            finally:
+                cap.release()
+                local_extractor.close()
+
+            if len(keypoints_list) == 0:
                 raise ValueError("Video contains no frames")
-            
-            logger.info(f"Extracted {len(frames)} frames from video")
-            
-            # Extract keypoints from frames
-            keypoints = self.extractor.extract_keypoints_from_frames(frames)
-            
-            return keypoints
-            
-        finally:
-            cap.release()
+
+            logger.info(f"Extracted keypoints from {frame_idx} frames")
+            return np.array(keypoints_list, dtype=np.float32)
+
+        loop = asyncio.get_event_loop()
+        keypoints = await loop.run_in_executor(_executor, _extract_sync)
+        return keypoints
     
     async def predict(
         self,
@@ -266,73 +291,82 @@ class WLASLModelService:
     ) -> Dict:
         """
         Run inference on keypoint sequence.
-        
+
+        Inference runs in a thread executor so the async event loop is not
+        blocked by PyTorch CPU computation.
+
         Args:
             keypoints: Keypoint sequence of shape (num_frames, 126)
-            use_tta: Override default TTA setting (optional)
+            use_tta: Override default TTA setting (optional).
+                     Set False for real-time/WebSocket use to reduce latency.
         Returns:
             Dictionary with prediction results
         """
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
-        
+
         start_time = time.time()
         use_tta = use_tta if use_tta is not None else self.use_tta
-        
+
         # Resample to target length
         keypoints = self.resample_sequence(keypoints, self.num_frames)
-        
+
         # Generate TTA variants if enabled
         if use_tta:
             variants = self.build_tta_variants(keypoints)
         else:
             variants = [keypoints]
-        
+
         # Convert to tensor and batch
         batch = np.stack(variants, axis=0)  # (num_variants, num_frames, 126)
         x = torch.from_numpy(batch).to(self.device)
-        
-        # Run inference — CPU only in Docker; autocast only helps on CUDA
-        with torch.no_grad():
-            logits = self.model(x)  # (num_variants, num_classes)
-        
+
+        def _infer_sync():
+            # Pure float32 — no autocast. The model was trained in float32 and
+            # autocast on CPU in PyTorch 2.x defaults to bfloat16, which produces
+            # completely different logits and causes random/wrong predictions.
+            with torch.no_grad():
+                return self.model(x)  # (num_variants, num_classes)
+
+        loop = asyncio.get_event_loop()
+        logits = await loop.run_in_executor(_executor, _infer_sync)
+
         # Average logits across variants
         avg_logits = logits.mean(dim=0, keepdim=True)  # (1, num_classes)
-        
+
         # Apply temperature scaling
         scaled_logits = avg_logits / self.temperature
-        
+
         # Compute probabilities
         probs = torch.softmax(scaled_logits, dim=-1)[0].cpu().numpy()
-        
+
         # Get top 5 predictions
         top5_indices = np.argsort(probs)[::-1][:5]
         top5_predictions = [
             (int(idx), float(probs[idx]))
             for idx in top5_indices
         ]
-        
+
         # Get glosses
         glosses = [
             self.vocab.get(str(idx), self.vocab.get(idx, f"unknown_{idx}"))
             for idx, _ in top5_predictions
         ]
-        
+
         # Processing time
         processing_time_ms = int((time.time() - start_time) * 1000)
-        
+
         # Update statistics
         self.total_predictions += 1
         self.total_inference_time_ms += processing_time_ms
         self.total_confidence += top5_predictions[0][1]
-        
-        # Log inference
+
         logger.info(
             f"Inference completed: {glosses[0]} "
             f"(confidence={top5_predictions[0][1]:.3f}, "
             f"time={processing_time_ms}ms, tta={use_tta})"
         )
-        
+
         return {
             "recognized_text": glosses[0],
             "glosses": glosses,

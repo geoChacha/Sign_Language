@@ -35,13 +35,17 @@ class KeypointExtractor:
     and reduce generalization. Hands-only features are framing-invariant.
     """
     
-    def __init__(self, model_complexity: int = 2):
+    def __init__(self, model_complexity: int = 1, static_image_mode: bool = False):
         """
         Initialize MediaPipe Holistic extractor.
-        
+
         Args:
             model_complexity: MediaPipe model complexity (0, 1, or 2)
-                             2 = best accuracy (recommended for production)
+                             1 = matches the complexity used in 1_extract_keypoints.py
+                             during training, avoiding a domain gap at inference time.
+            static_image_mode: If True, re-detects hands every frame (better for
+                             uploaded video files). If False, uses tracking between
+                             frames (better for live webcam streams).
         """
         if not MEDIAPIPE_AVAILABLE:
             raise RuntimeError(
@@ -50,7 +54,7 @@ class KeypointExtractor:
         
         self.model_complexity = model_complexity
         self.holistic = _mp_holistic.Holistic(
-            static_image_mode=False,
+            static_image_mode=static_image_mode,
             model_complexity=model_complexity,
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
@@ -59,7 +63,7 @@ class KeypointExtractor:
         # CLAHE for contrast normalization
         self.clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         
-        logger.info(f"KeypointExtractor initialized with model_complexity={model_complexity}")
+        logger.info(f"KeypointExtractor initialized with model_complexity={model_complexity}, static_image_mode={static_image_mode}")
     
     def preprocess_frame(self, frame: np.ndarray) -> np.ndarray:
         """

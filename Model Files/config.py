@@ -6,20 +6,26 @@ Edit the paths below to match your Kaggle dataset location.
 import os
 
 # ─── PATHS ────────────────────────────────────────────────────────────────────
-# Root folder of the extracted Kaggle dataset
-# Should contain: videos/, WLASL_v0.3.json, nslt_100.json, missing.txt
-DATASET_ROOT = r"wlasl-complete/"   # <-- CHANGE THIS
+# Resolve paths relative to this config file's location so the script works
+# regardless of which directory you run it from.
+_HERE = os.path.dirname(os.path.abspath(__file__))          # .../Model Files/
+_WORKSPACE = os.path.dirname(_HERE)                          # workspace root
 
-
-
+# FIX #4: removed redundant "./" — os.path.join with "./" can behave unexpectedly
+DATASET_ROOT = _WORKSPACE
 
 VIDEOS_DIR      = os.path.join(DATASET_ROOT, "videos")
 JSON_WLASL      = os.path.join(DATASET_ROOT, "WLASL_v0.3.json")
 JSON_100        = os.path.join(DATASET_ROOT, "nslt_100.json")
 MISSING_TXT     = os.path.join(DATASET_ROOT, "missing.txt")
-KEYPOINTS_DIR   = os.path.join(DATASET_ROOT, "keypoints_100")
-CHECKPOINTS_DIR = os.path.join(DATASET_ROOT, "checkpoints")
-SLP_DIR = os.path.join(DATASET_ROOT, "keypoints_slp")
+SLP_DIR         = os.path.join(DATASET_ROOT, "keypoints_slp")
+
+# ── Keypoints directory — pre-extracted .npy files at workspace root ────────
+KEYPOINTS_DIR   = os.path.join(_WORKSPACE, "keypoints_100")
+
+# ── Checkpoint directory — points to Model/best_model.pth ──────────────────
+CHECKPOINTS_DIR = os.path.join(_WORKSPACE, "Model")
+
 
 # KEYPOINT EXTRACTION
 NUM_FRAMES  = 64
@@ -51,7 +57,7 @@ PATIENCE      = 25
 # AUGMENTATION
 AUG_TEMPORAL_JITTER  = True
 AUG_SPATIAL_NOISE    = 0.015
-AUG_TEMPORAL_FLIP    = 0.0
+AUG_TEMPORAL_FLIP    = 0.0   # FIX #5: intentionally disabled — set to >0.0 to enable (e.g. 0.5)
 AUG_MIRROR           = 0.5
 AUG_SPEED_PERTURB    = True
 AUG_KEYPOINT_DROPOUT = 0.1

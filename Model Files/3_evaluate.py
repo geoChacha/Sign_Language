@@ -24,7 +24,7 @@ from dataset import WLASLDataset
 
 
 def load_model(ckpt_path: str, device: torch.device) -> SignLanguageTransformer:
-    ckpt = torch.load(ckpt_path, map_location=device)
+    ckpt = torch.load(ckpt_path, map_location=device,weights_only=False)
     mc = ckpt["config"]
     model = SignLanguageTransformer(
         feature_dim=mc["feature_dim"],

@@ -8,48 +8,29 @@ Buffer Strategy:
   - Runs sign detection on the window every PROCESS_EVERY_N frames
   - Returns partial results immediately so the client sees live feedback
 
-REAL IMPLEMENTATION NOTES:
-  - Replace _run_sign_detection() with your actual MediaPipe + model inference
-  - Replace _run_emotion_detection() with DeepFace / FER on the face crop
-  - For production: offload heavy inference to a thread pool (run_in_executor)
-    so it doesn't block the async event loop
+Implementation:
+  - Decodes base64 frames → numpy arrays via OpenCV
+  - Extracts MediaPipe hand keypoints per frame (in thread executor)
+  - Resamples sequence to 64 frames (nearest-neighbor, matches training)
+  - Runs TCN+BiGRU inference WITHOUT TTA for low-latency real-time use
+  - Emotion detection remains a placeholder (DeepFace/FER integration point)
 """
 
 import asyncio
 import base64
-import io
 import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
 
+import cv2
+import numpy as np
+
 # ── Constants ──
 FRAME_BUFFER_SIZE = 30       # sliding window of N frames
 PROCESS_EVERY_N  = 10        # run inference every N received frames
 MIN_FRAMES_TO_PROCESS = 5   # don't bother below this
-
-MOCK_GLOSSES = [
-    ["HELLO", "HOW", "YOU"],
-    ["THANK", "YOU"],
-    ["PLEASE", "HELP", "ME"],
-    ["I", "LOVE", "SIGN", "LANGUAGE"],
-    ["GOOD", "MORNING"],
-    ["MY", "NAME", "IS"],
-    ["NICE", "MEET", "YOU"],
-    ["UNDERSTAND", "YOU"],
-]
-
-MOCK_SENTENCES = [
-    "Hello, how are you?",
-    "Thank you very much.",
-    "Please help me.",
-    "I love sign language.",
-    "Good morning!",
-    "What is your name?",
-    "Nice to meet you.",
-    "Do you understand me?",
-]
 
 EMOTIONS = ["happy", "neutral", "sad", "angry", "surprised"]
 
@@ -88,47 +69,159 @@ class FrameBuffer:
         return list(self.frames)
 
 
+def _decode_frames_and_extract_keypoints(frames_b64: list) -> Optional[np.ndarray]:
+    """
+    Blocking function — runs in thread executor.
+
+    Decodes base64 frames, extracts MediaPipe hand keypoints from each,
+    and returns a (N, 126) float32 array.
+
+    Returns None if no valid frames could be decoded.
+    """
+    # Import here to avoid circular imports at module load time
+    try:
+        from app.ml.keypoint_extractor import KeypointExtractor
+    except ImportError:
+        return None
+
+    # Use a fresh extractor per call (stateless for real-time frames)
+    # model_complexity=1 matches training extraction
+    try:
+        extractor = KeypointExtractor(model_complexity=1)
+    except Exception:
+        return None
+
+    keypoints_list = []
+    try:
+        for frame_b64 in frames_b64:
+            try:
+                # Strip data URI prefix if present
+                if "," in frame_b64:
+                    frame_b64 = frame_b64.split(",", 1)[1]
+                raw = base64.b64decode(frame_b64)
+                arr = np.frombuffer(raw, np.uint8)
+                img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                if img is None:
+                    keypoints_list.append(np.zeros(126, dtype=np.float32))
+                    continue
+                kp = extractor.extract_keypoints_from_frame(img)
+                keypoints_list.append(kp)
+            except Exception:
+                keypoints_list.append(np.zeros(126, dtype=np.float32))
+    finally:
+        extractor.close()
+
+    if not keypoints_list:
+        return None
+
+    return np.array(keypoints_list, dtype=np.float32)
+
+
+def _run_inference(keypoints: np.ndarray) -> Optional[dict]:
+    """
+    Blocking function — runs in thread executor.
+
+    Resamples keypoints to 64 frames and runs TCN+BiGRU inference
+    WITHOUT TTA (use_tta=False) for low-latency real-time use.
+
+    Returns the prediction dict from WLASLModelService, or None on failure.
+    """
+    import asyncio as _asyncio
+
+    try:
+        from app.ml.wlasl_service import _wlasl_service
+        if _wlasl_service is None or _wlasl_service.model is None:
+            return None
+
+        # Resample — nearest-neighbor to match training
+        num_frames = keypoints.shape[0]
+        target = _wlasl_service.num_frames
+        if num_frames != target:
+            if num_frames < target:
+                padding = np.repeat(keypoints[-1:], target - num_frames, axis=0)
+                keypoints = np.vstack([keypoints, padding])
+            else:
+                indices = np.linspace(0, num_frames - 1, target).astype(int)
+                keypoints = keypoints[indices]
+
+        import torch
+        x = torch.from_numpy(keypoints[np.newaxis]).to(_wlasl_service.device)  # (1, T, 126)
+
+        with torch.no_grad():
+            logits = _wlasl_service.model(x)  # (1, num_classes)
+
+        scaled = logits / _wlasl_service.temperature
+        probs = torch.softmax(scaled, dim=-1)[0].cpu().numpy()
+
+        top5_idx = np.argsort(probs)[::-1][:5]
+        top5 = [(int(i), float(probs[i])) for i in top5_idx]
+        glosses = [
+            _wlasl_service.vocab.get(str(i), _wlasl_service.vocab.get(i, f"#{i}"))
+            for i, _ in top5
+        ]
+
+        return {
+            "recognized_text": glosses[0],
+            "glosses": glosses,
+            "confidence": top5[0][1],
+        }
+    except Exception:
+        return None
+
+
 async def process_frame_buffer(buffer: FrameBuffer) -> ProcessingResult:
     """
     Core processing function — runs on each trigger.
 
-    REAL IMPLEMENTATION:
-      1. Decode base64 frames → numpy arrays (cv2.imdecode)
-      2. Run MediaPipe Holistic on each frame → extract landmarks
-      3. Stack landmark sequences → shape (N, 1662) or similar
-      4. Normalize sequence length (pad/trim to fixed window)
-      5. Run through trained LSTM/Transformer model → gloss predictions
-      6. Convert glosses → natural language (seq2seq or lookup)
-      7. Run emotion detection on face crop of middle frame
-      8. Return structured result
+    1. Decodes base64 frames and extracts MediaPipe keypoints (thread executor)
+    2. Runs TCN+BiGRU inference without TTA for low latency (thread executor)
+    3. Falls back to a low-confidence placeholder if the model is unavailable
     """
     start = time.time()
+    frames_b64 = buffer.get_frames()
 
-    # Simulate async inference (replace with actual model call)
-    await asyncio.sleep(0.05)
+    loop = asyncio.get_event_loop()
 
-    # ── PLACEHOLDER: mock sign recognition ──
-    idx = random.randint(0, len(MOCK_GLOSSES) - 1)
-    glosses = MOCK_GLOSSES[idx]
-    text = MOCK_SENTENCES[idx]
-    confidence = round(random.uniform(0.65, 0.97), 3)
+    # Step 1: decode + extract keypoints (blocking, offloaded)
+    keypoints = await loop.run_in_executor(
+        None, _decode_frames_and_extract_keypoints, frames_b64
+    )
 
-    # ── PLACEHOLDER: mock emotion detection ──
-    dominant_emotion = random.choice(EMOTIONS)
-    emotion_scores = {e: round(random.uniform(0.01, 0.15), 3) for e in EMOTIONS}
-    emotion_scores[dominant_emotion] = round(random.uniform(0.5, 0.88), 3)
+    result_dict = None
+    if keypoints is not None and keypoints.shape[0] >= 2:
+        # Step 2: inference (blocking, offloaded)
+        result_dict = await loop.run_in_executor(None, _run_inference, keypoints)
 
     processing_time = int((time.time() - start) * 1000)
 
+    # ── Emotion detection placeholder ──
+    # TODO: integrate DeepFace/FER on the middle frame's face crop
+    dominant_emotion = "neutral"
+    emotion_scores = {e: round(random.uniform(0.01, 0.15), 3) for e in EMOTIONS}
+    emotion_scores[dominant_emotion] = round(random.uniform(0.5, 0.88), 3)
+
+    if result_dict is not None:
+        return ProcessingResult(
+            recognized_text=result_dict["recognized_text"],
+            glosses=result_dict["glosses"],
+            confidence=result_dict["confidence"],
+            emotion=dominant_emotion,
+            emotion_scores=emotion_scores,
+            is_partial=result_dict["confidence"] < 0.40,
+            frame_count=len(buffer.frames),
+            processing_time_ms=processing_time,
+        )
+
+    # Fallback: model not loaded or extraction failed
     return ProcessingResult(
-        recognized_text=text,
-        glosses=glosses,
-        confidence=confidence,
+        recognized_text="",
+        glosses=[],
+        confidence=0.0,
         emotion=dominant_emotion,
         emotion_scores=emotion_scores,
-        is_partial=confidence < 0.80,
+        is_partial=True,
         frame_count=len(buffer.frames),
-        processing_time_ms=processing_time
+        processing_time_ms=processing_time,
     )
 
 
@@ -136,12 +229,6 @@ async def decode_base64_frame(frame_b64: str) -> Optional[bytes]:
     """
     Decode a base64 encoded image frame.
     Strips data URI prefix if present (e.g. 'data:image/jpeg;base64,...')
-
-    REAL IMPLEMENTATION:
-      After decoding, convert to numpy array:
-        import numpy as np, cv2
-        arr = np.frombuffer(frame_bytes, np.uint8)
-        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     """
     try:
         if "," in frame_b64:

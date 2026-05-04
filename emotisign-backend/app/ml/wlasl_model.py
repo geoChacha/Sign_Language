@@ -200,53 +200,18 @@ class SignLanguageTransformer(nn.Module):
         """
         Load model from checkpoint file.
 
-        Compatible with PyTorch 2.0 through 2.6+.
-
-        PyTorch 2.6 made weights_only=True the default and requires explicit
-        whitelisting of non-tensor types via add_safe_globals(). Our checkpoint
-        contains a config dict and an OrderedDict state, so we whitelist those.
-        On older PyTorch (< 2.4) that lacks add_safe_globals, we fall back to
-        weights_only=False which is safe for our own trusted checkpoint.
-
         Args:
             checkpoint_path: Path to .pth checkpoint file
             device: Device to load model on ('cuda' or 'cpu')
         Returns:
             Loaded model in eval mode
         """
-        import collections
-        import torch.serialization as _ts
-
-        checkpoint = None
-
-        # Strategy 1: PyTorch >= 2.4 — use add_safe_globals + weights_only=True
-        if hasattr(_ts, "add_safe_globals"):
-            try:
-                _ts.add_safe_globals([
-                    dict,
-                    list,
-                    int,
-                    float,
-                    str,
-                    bool,
-                    collections.OrderedDict,
-                ])
-                checkpoint = torch.load(
-                    checkpoint_path,
-                    map_location=device,
-                    weights_only=True,
-                )
-            except Exception:
-                checkpoint = None  # fall through to strategy 2
-
-        # Strategy 2: PyTorch < 2.4 or safe globals failed — weights_only=False
-        # Safe because this is our own trained checkpoint, not a third-party file
-        if checkpoint is None:
-            checkpoint = torch.load(
-                checkpoint_path,
-                map_location=device,
-                weights_only=False,
-            )
+        # weights_only=False — safe because this is our own trained checkpoint
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location=device,
+            weights_only=False,
+        )
 
         # Extract model config from checkpoint
         config = checkpoint.get("config", {})

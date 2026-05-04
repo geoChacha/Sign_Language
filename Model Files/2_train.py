@@ -21,7 +21,7 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast          # FIX #3: updated import (torch.cuda.amp deprecated)
 
 import argparse
 import config as cfg
@@ -67,7 +67,8 @@ def accuracy(logits: torch.Tensor, targets: torch.Tensor, topk=(1, 5)):
         return results
 
 
-def run_epoch(model, loader, criterion, optimizer, scaler, device, train: bool):
+def run_epoch(model, loader, criterion, scaler, device, train: bool, optimizer=None):
+    # FIX #2: optimizer is now an optional kwarg — only required when train=True
     model.train() if train else model.eval()
     total_loss = 0.0
     top1_total = 0.0
@@ -81,7 +82,7 @@ def run_epoch(model, loader, criterion, optimizer, scaler, device, train: bool):
 
             if train:
                 optimizer.zero_grad(set_to_none=True)
-                with autocast():
+                with autocast(device_type="cuda"):   # FIX #3: explicit device_type
                     logits = model(x)
                     loss   = criterion(logits, y)
                 scaler.scale(loss).backward()
@@ -90,7 +91,7 @@ def run_epoch(model, loader, criterion, optimizer, scaler, device, train: bool):
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                with autocast():
+                with autocast(device_type="cuda"):   # FIX #3: explicit device_type
                     logits = model(x)
                     loss   = criterion(logits, y)
 
@@ -121,7 +122,6 @@ def main():
     if args.trainval:
         print("[Train] Mode: train+val combined (fixed epochs, no early stopping)")
         train_loader, val_loader, vocab = get_trainval_loader()
-        # val_loader here is actually test loader - used for monitoring only
         use_early_stopping = False
     else:
         train_loader, val_loader, _, vocab = get_loaders()
@@ -152,10 +152,10 @@ def main():
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=cfg.LR, weight_decay=cfg.WEIGHT_DECAY, betas=(0.9, 0.98)
     )
-    scaler = GradScaler()
+    scaler = GradScaler(device="cuda")   # FIX #3: explicit device arg
 
     # ── Training loop ──────────────────────────────────────────────────────────
-    num_epochs = args.epochs if args.epochs else cfg.NUM_EPOCHS
+    num_epochs = args.epochs if args.epochs else cfg.NUM_EPOCHS   # FIX #1: use local var
     best_val_top1 = 0.0
     patience_counter = 0
     history = []
@@ -166,12 +166,18 @@ def main():
         lr = get_lr(optimizer)
 
         t0 = time.time()
-        tr_loss, tr_top1, tr_top5 = run_epoch(model, train_loader, criterion, optimizer, scaler, device, train=True)
-        va_loss, va_top1, va_top5 = run_epoch(model, val_loader,   criterion, optimizer, scaler, device, train=False)
+        tr_loss, tr_top1, tr_top5 = run_epoch(
+            model, train_loader, criterion, scaler, device, train=True, optimizer=optimizer
+        )
+        va_loss, va_top1, va_top5 = run_epoch(
+            model, val_loader, criterion, scaler, device, train=False
+            # FIX #2: optimizer not passed for validation
+        )
         elapsed = time.time() - t0
 
+        # FIX #1: use num_epochs (respects --epochs override) instead of cfg.NUM_EPOCHS
         print(
-            f"Epoch {epoch+1:03d}/{cfg.NUM_EPOCHS}  lr={lr:.2e}  "
+            f"Epoch {epoch+1:03d}/{num_epochs}  lr={lr:.2e}  "
             f"tr_loss={tr_loss:.4f}  tr@1={tr_top1:.1f}  tr@5={tr_top5:.1f}  "
             f"va_loss={va_loss:.4f}  va@1={va_top1:.1f}  va@5={va_top5:.1f}  "
             f"[{elapsed:.0f}s]"

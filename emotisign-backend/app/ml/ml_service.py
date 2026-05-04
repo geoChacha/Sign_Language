@@ -2,8 +2,9 @@
 EmotiSign ML Service
 
 Delegates text_to_sign() to SignGenerator (real keypoint-based implementation).
-Other functions (sign_to_text, analyze_sentiment, detect_emotion_from_video)
-remain as placeholders ready for future model integration.
+Delegates sign_to_text() to WLASLModelService (real TCN+BiGRU model).
+Other functions (analyze_sentiment, detect_emotion_from_video) remain as
+placeholders ready for future model integration.
 """
 
 import asyncio
@@ -59,65 +60,48 @@ async def text_to_sign(text: str, sign_language: str = "ASL") -> dict:
 
 
 # ──────────────────────────────────────────────────────────────
-#  SIGN → TEXT  (video input)
+#  SIGN → TEXT  (video input — delegates to WLASLModelService)
 # ──────────────────────────────────────────────────────────────
 
 async def sign_to_text(video_path: str, sign_language: str = "ASL") -> dict:
     """
     Recognize sign language from an uploaded video file and convert to text.
 
-    PLACEHOLDER — returns a mock transcription.
+    Delegates to WLASLModelService which runs:
+      1. Frame-by-frame MediaPipe keypoint extraction (in thread executor)
+      2. Nearest-neighbor sequence resampling to 64 frames
+      3. TCN + BiGRU inference with TTA (in thread executor)
+      4. Temperature-scaled confidence scores
 
-    REAL IMPLEMENTATION:
-      1. Load video frames (OpenCV)
-      2. Extract hand/body keypoints per frame (MediaPipe Holistic)
-      3. Normalize & window keypoint sequences
-      4. Pass through trained gesture classification model:
-         - Option A: LSTM / BiLSTM on keypoint sequences
-         - Option B: Transformer (like SignBERT or SPOTER)
-         - Option C: CNN on pose heatmaps
-      5. Post-process predicted sign glosses → English/Urdu text
-         (sign language gloss order ≠ spoken language word order)
-      6. Return text + confidence + detected signs list
+    Falls back to a safe error response if the WLASL service is unavailable.
 
     Returns:
       {
         "recognized_text": str,
-        "glosses": [...],        # raw sign glosses before translation
+        "glosses": [...],
         "confidence": float,
         "sign_language": str,
         "frame_count": int,
         "processing_time_ms": int
       }
     """
-    start = time.time()
-    await asyncio.sleep(0.2)  # Simulate processing
-
-    mock_responses = [
-        "Hello, how are you?",
-        "Thank you very much.",
-        "Please help me.",
-        "I am happy to meet you.",
-        "Good morning, nice to see you.",
-        "Can you understand me?",
-        "I love sign language.",
-    ]
-
-    path = Path(video_path)
-    frame_count = random.randint(30, 300)  # Mock
-
-    processing_time = int((time.time() - start) * 1000 + frame_count * 2)
-
-    return {
-        "recognized_text": random.choice(mock_responses),
-        "glosses": ["HELLO", "HOW", "YOU"],  # Mock ASL glosses
-        "confidence": round(random.uniform(0.72, 0.97), 3),
-        "sign_language": sign_language,
-        "frame_count": frame_count,
-        "video_path": str(path),
-        "processing_time_ms": processing_time,
-        "note": "PLACEHOLDER — integrate real CV/pose estimation model here"
-    }
+    try:
+        from app.ml.wlasl_service import get_wlasl_service
+        wlasl_service = await get_wlasl_service()
+        return await wlasl_service.sign_to_text(video_path, use_tta=True)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"sign_to_text failed: {e}")
+        return {
+            "recognized_text": "",
+            "glosses": [],
+            "confidence": 0.0,
+            "sign_language": sign_language,
+            "frame_count": 0,
+            "video_path": str(video_path),
+            "processing_time_ms": 0,
+            "error": str(e),
+        }
 
 
 # ──────────────────────────────────────────────────────────────

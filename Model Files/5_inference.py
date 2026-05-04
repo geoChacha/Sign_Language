@@ -141,7 +141,7 @@ def load_model_and_vocab(device: torch.device):
     if not os.path.exists(vocab_path):
         raise FileNotFoundError(f"Vocab not found: {vocab_path}")
 
-    ckpt = torch.load(ckpt_path, map_location=device)
+    ckpt = torch.load(ckpt_path, map_location=device,weights_only=False)
     mc   = ckpt["config"]
     model = SignLanguageTransformer(
         feature_dim=mc["feature_dim"],
