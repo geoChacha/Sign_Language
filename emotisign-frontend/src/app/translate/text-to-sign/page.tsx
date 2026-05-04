@@ -42,12 +42,6 @@ export default function TextToSignPage() {
   const [emotion, setEmotion] = useState<EmotionAnalysis | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [showVocab, setShowVocab] = useState(false);
-  const [debugLog, setDebugLog] = useState<string[]>([]);
-
-  const log = (msg: string) => {
-    console.log('[TTS]', msg);
-    setDebugLog(prev => [...prev.slice(-6), msg]);
-  };
 
   // ── Sequential sign playback ─────────────────────────────────────────────
   // Uses a recursive setTimeout chain. Each call schedules the NEXT sign
@@ -63,7 +57,6 @@ export default function TextToSignPage() {
 
     const sign = signList[idx];
     setCurrentWord(sign.word);
-    log(`playSign idx=${idx} word="${sign.word}" keypoints=${sign.keypoints?.length ?? 'null'} frames=${sign.frames.length}`);
 
     if (sign.keypoints && sign.keypoints.length > 0) {
       setIsFingerspelled(false);
@@ -105,11 +98,6 @@ export default function TextToSignPage() {
         include_emotion: true,
       });
 
-      log(`API OK: ${response.signs.length} signs, fingerspelled=[${response.fingerspelled_words}]`);
-      response.signs.forEach((s: any) => {
-        log(`  sign "${s.word}": keypoints=${s.keypoints?.length ?? 'null'} frames=${s.frames?.length}`);
-      });
-
       setSigns(response.signs);
       if (response.emotion_analysis) setEmotion(response.emotion_analysis);
 
@@ -121,7 +109,6 @@ export default function TextToSignPage() {
       }
     } catch (err) {
       console.error('Translation error:', err);
-      log(`ERROR: ${String(err)}`);
       toast.error('Translation failed — is the backend running?');
       setState('idle');
     }
@@ -207,15 +194,6 @@ export default function TextToSignPage() {
                           background: 'rgba(0,0,0,0.65)', color: 'white', padding: '4px 16px',
                           borderRadius: 9999, fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>
               {currentWord}
-            </div>
-          )}
-
-          {/* Debug overlay — remove after fixing */}
-          {debugLog.length > 0 && (
-            <div style={{ position: 'absolute', top: 8, left: 8, right: 8,
-                          background: 'rgba(0,0,0,0.8)', color: '#0f0', fontFamily: 'monospace',
-                          fontSize: 11, padding: 8, borderRadius: 6, pointerEvents: 'none' }}>
-              {debugLog.map((l, i) => <div key={i}>{l}</div>)}
             </div>
           )}
         </div>
