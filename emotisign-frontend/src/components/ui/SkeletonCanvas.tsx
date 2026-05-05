@@ -40,7 +40,7 @@ const HAND_CONNECTIONS: [number, number][] = [
 ];
 
 // ── Colors ──────────────────────────────────────────────────────────────────
-const BG       = '#1a1a2e';
+const BG       = '#0f172a';
 const CYAN     = '#00FFFF';
 const MAGENTA  = '#FF00FF';
 const RED      = '#FF4444';

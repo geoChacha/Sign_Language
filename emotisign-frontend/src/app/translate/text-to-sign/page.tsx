@@ -153,9 +153,11 @@ export default function TextToSignPage() {
 
         {/* ── Canvas viewport ── */}
         <div
-          style={{ background: '#1a1a2e', borderRadius: '0.75rem', position: 'relative',
+          style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%)',
+                   borderRadius: '0.75rem', position: 'relative',
                    width: '100%', aspectRatio: '1 / 1', maxHeight: 480,
-                   display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+                   display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+                   boxShadow: '0 0 0 1px rgba(139,92,246,0.3), 0 4px 24px rgba(0,0,0,0.4)' }}
         >
           {/* Skeleton canvas — always mounted when keypoints available */}
           {currentKeypoints && currentKeypoints.length > 0 ? (

@@ -174,16 +174,24 @@ class EnvironmentValidator:
         
         detected_count = sum(landmarks_detected.values())
         
-        if detected_count == 4:
+        # Require torso + arms + at least one hand for "visible"
+        # (one hand may be down or briefly out of frame — that's fine)
+        core_visible = torso_visible and arms_visible
+        hands_visible = left_hand_visible or right_hand_visible
+
+        if core_visible and hands_visible:
             status = "visible"
-            message = "All body parts visible - perfect!"
+            message = "Body visible - good positioning!"
+        elif core_visible:
+            status = "partial"
+            message = "Raise your hands into frame to continue"
         elif detected_count >= 2:
             status = "partial"
             missing = [k for k, v in landmarks_detected.items() if not v]
-            message = f"Partially visible - ensure {', '.join(missing)} are in frame"
+            message = f"Partially visible — ensure {', '.join(missing)} are in frame"
         else:
             status = "not_visible"
-            message = "Body not visible - step back and ensure full upper body is in frame"
+            message = "Body not visible — step back so your upper body fills the frame"
         
         return {
             "status": status,
