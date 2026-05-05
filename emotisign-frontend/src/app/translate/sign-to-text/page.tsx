@@ -228,6 +228,7 @@ export default function SignToTextPage() {
     try {
       recordedChunksRef.current = [];
       setRecordingTime(0);
+      setThumbnailUrl(null); // clear old thumbnail — new one captured on stop
       const mediaRecorder = new MediaRecorder(streamRef.current, {
         mimeType: 'video/webm;codecs=vp9',
       });
@@ -320,7 +321,6 @@ export default function SignToTextPage() {
     setError(null);
     setRecordingTime(0);
     setSelectedFile(null);
-    setThumbnailUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setState('idle');
   }, []);
@@ -392,7 +392,13 @@ export default function SignToTextPage() {
             />
           )}
 
-          <div className="camera-container bg-gray-200 rounded-xl overflow-hidden">
+          <div className="camera-container bg-gray-200 rounded-xl overflow-hidden"
+            style={thumbnailUrl && (state === 'idle' || state === 'done' || state === 'review') ? {
+              backgroundImage: `url(${thumbnailUrl})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            } : undefined}
+          >
             <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
 
             {/* Body position guide — shown during validation */}

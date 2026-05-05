@@ -40,12 +40,12 @@ const HAND_CONNECTIONS: [number, number][] = [
 ];
 
 // ── Colors ──────────────────────────────────────────────────────────────────
-const BG       = '#f8fafc';
-const CYAN     = '#0891b2';
-const MAGENTA  = '#a21caf';
-const RED      = '#dc2626';
-const LIME     = '#16a34a';
-const BODY_DOT = '#3b82f6';
+const BG       = '#0f172a';
+const CYAN     = '#00FFFF';
+const MAGENTA  = '#FF00FF';
+const RED      = '#FF3333';
+const LIME     = '#00FF66';
+const BODY_DOT = '#7C83FF';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -185,23 +185,23 @@ export function drawFrame(
   POSE_CONNECTIONS.forEach(([i, j], idx) => {
     const color = idx < POSE_CYAN_COUNT ? CYAN : MAGENTA;
     if (i < body.length && j < body.length)
-      drawLine(ctx, body[i], body[j], color, 3, bounds, width, height);
+      drawLine(ctx, body[i], body[j], color, 4, bounds, width, height);
   });
-  body.forEach(lm => drawDot(ctx, lm, BODY_DOT, 3, bounds, width, height));
+  body.forEach(lm => drawDot(ctx, lm, BODY_DOT, 4, bounds, width, height));
 
   // Left hand
   HAND_CONNECTIONS.forEach(([i, j]) => {
     if (i < leftHand.length && j < leftHand.length)
-      drawLine(ctx, leftHand[i], leftHand[j], RED, 2.5, bounds, width, height);
+      drawLine(ctx, leftHand[i], leftHand[j], RED, 3.5, bounds, width, height);
   });
-  leftHand.forEach(lm => drawDot(ctx, lm, RED, 3, bounds, width, height));
+  leftHand.forEach(lm => drawDot(ctx, lm, RED, 4, bounds, width, height));
 
   // Right hand
   HAND_CONNECTIONS.forEach(([i, j]) => {
     if (i < rightHand.length && j < rightHand.length)
-      drawLine(ctx, rightHand[i], rightHand[j], LIME, 2.5, bounds, width, height);
+      drawLine(ctx, rightHand[i], rightHand[j], LIME, 3.5, bounds, width, height);
   });
-  rightHand.forEach(lm => drawDot(ctx, lm, LIME, 3, bounds, width, height));
+  rightHand.forEach(lm => drawDot(ctx, lm, LIME, 4, bounds, width, height));
 }
 
 // ── Component ────────────────────────────────────────────────────────────────

@@ -153,11 +153,11 @@ export default function TextToSignPage() {
 
         {/* ── Canvas viewport ── */}
         <div
-          style={{ background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #f8fafc 100%)',
+          style={{ background: 'radial-gradient(ellipse at 50% 40%, #1e293b 0%, #0f172a 60%, #020617 100%)',
                    borderRadius: '0.75rem', position: 'relative',
                    width: '100%', aspectRatio: '1 / 1', maxHeight: 480,
                    display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-                   boxShadow: '0 0 0 1px rgba(0,0,0,0.08), 0 4px 24px rgba(0,0,0,0.08)' }}
+                   boxShadow: '0 0 0 1px rgba(99,102,241,0.2), 0 8px 32px rgba(0,0,0,0.5)' }}
         >
           {/* Skeleton canvas — always mounted when keypoints available */}
           {currentKeypoints && currentKeypoints.length > 0 ? (
@@ -172,16 +172,16 @@ export default function TextToSignPage() {
             />
           ) : state === 'translating' ? (
             <div className="flex flex-col items-center gap-3">
-              <div className="loading-dots text-gray-400"><span/><span/><span/></div>
-              <p className="text-gray-400 text-sm">Generating signs…</p>
+              <div className="loading-dots text-white/60"><span/><span/><span/></div>
+              <p className="text-white/60 text-sm">Generating signs…</p>
             </div>
           ) : isFingerspelled && currentWord ? (
             <div className="text-center px-6">
-              <p className="text-gray-400 text-xs uppercase tracking-widest mb-2">Fingerspelling</p>
-              <p className="text-gray-800 text-5xl font-bold tracking-widest uppercase">{currentWord}</p>
+              <p className="text-white/40 text-xs uppercase tracking-widest mb-2">Fingerspelling</p>
+              <p className="text-white text-5xl font-bold tracking-widest uppercase">{currentWord}</p>
             </div>
           ) : (
-            <div className="flex flex-col items-center gap-3 text-gray-400">
+            <div className="flex flex-col items-center gap-3 text-white/30">
               <svg className="w-14 h-14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.2}
                   d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
@@ -193,9 +193,8 @@ export default function TextToSignPage() {
           {/* Word label */}
           {currentWord && (
             <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
-                          background: 'rgba(0,0,0,0.12)', color: '#1e293b', padding: '4px 16px',
-                          borderRadius: 9999, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap',
-                          backdropFilter: 'blur(4px)', border: '1px solid rgba(0,0,0,0.08)' }}>
+                          background: 'rgba(0,0,0,0.65)', color: 'white', padding: '4px 16px',
+                          borderRadius: 9999, fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>
               {currentWord}
             </div>
           )}
