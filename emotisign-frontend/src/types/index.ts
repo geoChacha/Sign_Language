@@ -211,4 +211,7 @@ export interface PredictionResult {
   frame_count: number;
   processing_time_ms: number;
   sign_language: string;
+  // PSL-specific fields (Pakistan Sign Language)
+  urdu_label?: string;
+  top_predictions?: { label: string; confidence: number }[];
 }

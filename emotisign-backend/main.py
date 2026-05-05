@@ -51,6 +51,19 @@ async def lifespan(app: FastAPI):
         import traceback
         traceback.print_exc()
         ml_service = None
+
+    # Initialize PSL service (Pakistan Sign Language model)
+    try:
+        from app.ml.psl_service import get_psl_service
+        psl_service = await get_psl_service()
+        print("✅ PSL model loaded successfully")
+    except Exception as e:
+        print(f"⚠️  Warning: PSL service initialization failed: {e}")
+        print(f"   Error type: {type(e).__name__}")
+        print(f"   PSL sign-to-text endpoint will not be available")
+        import traceback
+        traceback.print_exc()
+        psl_service = None
     
     print("✅ EmotiSign backend started.")
     print("🧪 Tester UI: http://127.0.0.1:8000/tester")
