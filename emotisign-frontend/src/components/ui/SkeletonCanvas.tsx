@@ -40,12 +40,12 @@ const HAND_CONNECTIONS: [number, number][] = [
 ];
 
 // ── Colors ──────────────────────────────────────────────────────────────────
-const BG       = '#0f172a';
-const CYAN     = '#00FFFF';
-const MAGENTA  = '#FF00FF';
-const RED      = '#FF4444';
-const LIME     = '#00FF00';
-const BODY_DOT = '#6699FF';
+const BG       = '#f8fafc';
+const CYAN     = '#0891b2';
+const MAGENTA  = '#a21caf';
+const RED      = '#dc2626';
+const LIME     = '#16a34a';
+const BODY_DOT = '#3b82f6';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

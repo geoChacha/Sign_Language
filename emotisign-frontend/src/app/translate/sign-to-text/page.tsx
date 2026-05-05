@@ -43,6 +43,7 @@ export default function SignToTextPage() {
   const [countdown, setCountdown] = useState(3);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // How many of the 3 checks are passing right now
@@ -88,6 +89,21 @@ export default function SignToTextPage() {
     if (!selectedFile) return;
     setState('processing');
     setError(null);
+    // Generate thumbnail from uploaded video file
+    try {
+      const url = URL.createObjectURL(selectedFile);
+      const vid = document.createElement('video');
+      vid.src = url;
+      vid.currentTime = 0.5;
+      vid.onloadeddata = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = vid.videoWidth || 640;
+        canvas.height = vid.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        if (ctx) { ctx.drawImage(vid, 0, 0); setThumbnailUrl(canvas.toDataURL('image/jpeg', 0.8)); }
+        URL.revokeObjectURL(url);
+      };
+    } catch { /* non-fatal */ }
     try {
       const formData = new FormData();
       formData.append('video', selectedFile);
@@ -242,6 +258,17 @@ export default function SignToTextPage() {
   }, []);
 
   const stopRecording = useCallback(() => {
+    // Capture thumbnail from current video frame before stopping
+    if (videoRef.current && videoRef.current.videoWidth > 0) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0);
+        setThumbnailUrl(canvas.toDataURL('image/jpeg', 0.8));
+      }
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
@@ -293,6 +320,7 @@ export default function SignToTextPage() {
     setError(null);
     setRecordingTime(0);
     setSelectedFile(null);
+    setThumbnailUrl(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setState('idle');
   }, []);
@@ -328,10 +356,6 @@ export default function SignToTextPage() {
 
   const showIndicator = state === 'validating' || state === 'countdown' || state === 'recording';
   const isActive = state === 'validating' || state === 'countdown' || state === 'recording' || state === 'processing';
-
-  // SVG border indicator dimensions
-  const BORDER_R = 12; // border-radius of camera container
-  // We'll use a CSS approach with conic-gradient for the animated border
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -476,12 +500,28 @@ export default function SignToTextPage() {
               {state === 'processing' && (
                 <motion.div
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-white/90 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center"
+                  className="absolute inset-0 rounded-xl flex flex-col items-center justify-center overflow-hidden"
                 >
-                  <h3 className="text-primary-600 font-semibold text-lg mb-2">Processing Video</h3>
-                  <p className="text-gray-600 mb-4">Translating your signs...</p>
-                  <div className="loading-dots text-primary-600"><span /><span /><span /></div>
-                  <p className="text-gray-500 text-sm mt-2">This may take a few seconds</p>
+                  {/* Thumbnail background */}
+                  {thumbnailUrl && (
+                    <img
+                      src={thumbnailUrl}
+                      alt=""
+                      className="absolute inset-0 w-full h-full object-cover"
+                      style={{ filter: 'blur(6px) brightness(0.6)', transform: 'scale(1.08)' }}
+                    />
+                  )}
+                  {/* Frosted glass overlay */}
+                  <div className="absolute inset-0" style={{ background: 'rgba(255,255,255,0.35)', backdropFilter: 'blur(2px)' }} />
+                  {/* Content */}
+                  <div className="relative z-10 flex flex-col items-center gap-3 px-6 py-8 rounded-2xl"
+                    style={{ background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(12px)',
+                             boxShadow: '0 4px 32px rgba(0,0,0,0.12)', border: '1px solid rgba(255,255,255,0.7)' }}>
+                    <h3 className="text-primary-700 font-semibold text-lg">Processing Video</h3>
+                    <p className="text-gray-600 text-sm">Translating your signs…</p>
+                    <div className="loading-dots text-primary-600"><span /><span /><span /></div>
+                    <p className="text-gray-500 text-xs mt-1">This may take a few seconds</p>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
