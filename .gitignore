@@ -1,0 +1,82 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# PyTorch Models (trained weights)
+*.pt
+*.pth
+*.ckpt
+
+# Training Outputs
+alphabet_recognition/training_log.csv
+alphabet_recognition/dataset_statistics.txt
+alphabet_recognition/evaluation_report.txt
+alphabet_recognition/confusion_matrix.txt
+alphabet_recognition/confusion_matrix.png
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Logs
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+
+# Dataset (optional - uncomment if you don't want to track dataset)
+# PSL_dataset/
+# previous/
+
+# Kiro (optional - uncomment if you don't want to track specs)
+# .kiro/
