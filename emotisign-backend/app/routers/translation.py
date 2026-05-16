@@ -49,11 +49,17 @@ async def translate_text_to_sign(
     Works for both authenticated users and guests.
     Emotion/sentiment analysis is performed on the input text.
     """
+    if payload.sign_language != SignLanguage.ASL:
+        raise HTTPException(
+            status_code=400,
+            detail="Text-to-sign currently supports ASL only. Use PSL Alphabet or chat video for PSL.",
+        )
+
     start = time.time()
 
     # Run ML tasks concurrently
     import asyncio
-    sign_task = asyncio.create_task(text_to_sign(payload.text, payload.sign_language.value))
+    sign_task = asyncio.create_task(text_to_sign(payload.text, SignLanguage.ASL.value))
     sentiment_task = asyncio.create_task(analyze_sentiment(payload.text)) if payload.include_emotion else None
 
     sign_result = await sign_task

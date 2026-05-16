@@ -19,6 +19,7 @@ from app.config import settings
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    os.makedirs("uploads/chat_videos", exist_ok=True)
     os.makedirs("uploads/audio", exist_ok=True)
     os.makedirs("uploads/tts_output", exist_ok=True)
     os.makedirs("static/signs", exist_ok=True)
@@ -52,19 +53,19 @@ async def lifespan(app: FastAPI):
         traceback.print_exc()
         ml_service = None
 
-    # Initialize PSL service (Pakistan Sign Language model)
+    # Initialize PSL live service (AlphabetClassifier — validates model file exists)
     try:
-        from app.ml.psl_service import get_psl_service
-        psl_service = await get_psl_service()
-        print("✅ PSL model loaded successfully")
+        from app.ml.psl_live_service import get_psl_live_service
+        psl_live = get_psl_live_service()
+        await psl_live.load_model()
+        psl_live.close()  # release MediaPipe — per-session instances used at runtime
+        print("✅ PSL live service (AlphabetClassifier) loaded successfully")
     except Exception as e:
-        print(f"⚠️  Warning: PSL service initialization failed: {e}")
-        print(f"   Error type: {type(e).__name__}")
-        print(f"   PSL sign-to-text endpoint will not be available")
+        print(f"⚠️  Warning: PSL live service initialization failed: {e}")
+        print(f"   PSL alphabet WebSocket endpoint will not be available")
         import traceback
         traceback.print_exc()
-        psl_service = None
-    
+
     print("✅ EmotiSign backend started.")
     print("🧪 Tester UI: http://127.0.0.1:8000/tester")
     print("📖 API Docs:  http://127.0.0.1:8000/docs")
@@ -97,6 +98,7 @@ app.add_middleware(
 
 # ── Static files ──
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # ── Tester UI route ──
 @app.get("/tester", include_in_schema=False)
@@ -124,6 +126,7 @@ async def root():
             "live_text_to_sign": "ws://127.0.0.1:8000/ws/translate/text-to-sign?token=<JWT>",
             "live_speech_to_text": "ws://127.0.0.1:8000/ws/speech/live-stt?token=<JWT>",
             "chat": "ws://127.0.0.1:8000/api/chat/ws/chat/{room_id}?token=<JWT>",
+            "psl_live_alphabet": "ws://127.0.0.1:8000/ws/translate/psl-live",
         }
     }
 

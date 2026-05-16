@@ -170,6 +170,7 @@ class ChatMessageResponse(BaseModel):
     translated_text: Optional[str]
     sign_data: Optional[str]
     video_path: Optional[str]
+    sign_language: Optional[str] = None  # ASL | PSL for sign_video messages
     emotion: Optional[Emotion]
     sentiment_label: Optional[str]
     is_read: bool

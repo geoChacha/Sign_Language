@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -59,7 +60,7 @@ export default function Navbar({ variant = 'landing' }: NavbarProps) {
                     : 'text-gray-300 hover:text-white'
                 }`}
               >
-                {'icon' in link && link.icon}
+                {'icon' in link && (link as { icon: React.ReactNode }).icon}
                 {link.label}
               </Link>
             ))}

@@ -155,6 +155,25 @@ class ApiClient {
     await this.client.patch(`/api/chat/rooms/${roomId}/read`);
   }
 
+  async uploadChatSignVideo(roomId: number, videoFile: File): Promise<{ video_url: string }> {
+    const formData = new FormData();
+    formData.append('video', videoFile);
+    const response = await this.client.post<{ video_url: string }>(
+      `/api/chat/rooms/${roomId}/sign-video`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return response.data;
+  }
+
+  /** Resolve chat/upload paths to a full URL for <video src>. */
+  mediaUrl(path: string | null | undefined): string {
+    if (!path) return '';
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const base = API_URL.replace(/\/$/, '');
+    return path.startsWith('/') ? `${base}${path}` : `${base}/${path}`;
+  }
+
   async speechToText(
     audioFile: File,
     language: string = 'en',

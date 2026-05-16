@@ -13,12 +13,11 @@ Implementation:
   - Extracts MediaPipe hand keypoints per frame (in thread executor)
   - Resamples sequence to 64 frames (nearest-neighbor, matches training)
   - Runs TCN+BiGRU inference WITHOUT TTA for low-latency real-time use
-  - Emotion detection remains a placeholder (DeepFace/FER integration point)
+  - Face emotion (happy / sad / neutral) via MediaPipe Face Mesh
 """
 
 import asyncio
 import base64
-import random
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -32,7 +31,7 @@ FRAME_BUFFER_SIZE = 30       # sliding window of N frames
 PROCESS_EVERY_N  = 10        # run inference every N received frames
 MIN_FRAMES_TO_PROCESS = 5   # don't bother below this
 
-EMOTIONS = ["happy", "neutral", "sad", "angry", "surprised"]
+EMOTIONS = ["happy", "neutral", "sad"]
 
 
 @dataclass
@@ -117,6 +116,33 @@ def _decode_frames_and_extract_keypoints(frames_b64: list) -> Optional[np.ndarra
     return np.array(keypoints_list, dtype=np.float32)
 
 
+def _decode_middle_frame_b64(frames_b64: list) -> Optional[np.ndarray]:
+    """Decode the middle frame from a base64 buffer for face emotion."""
+    if not frames_b64:
+        return None
+    mid = frames_b64[len(frames_b64) // 2]
+    try:
+        if "," in mid:
+            mid = mid.split(",", 1)[1]
+        raw = base64.b64decode(mid)
+        arr = np.frombuffer(raw, np.uint8)
+        return cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    except Exception:
+        return None
+
+
+def _detect_face_emotion(frame_bgr: Optional[np.ndarray]) -> tuple[str, dict]:
+    if frame_bgr is None:
+        return "neutral", {"happy": 0.1, "sad": 0.1, "neutral": 0.7}
+    try:
+        from app.ml.face_emotion_service import get_face_emotion_detector
+
+        det = get_face_emotion_detector().detect_from_frame(frame_bgr)
+        return det["emotion"], det["emotion_scores"]
+    except Exception:
+        return "neutral", {"happy": 0.1, "sad": 0.1, "neutral": 0.7}
+
+
 def _run_inference(keypoints: np.ndarray) -> Optional[dict]:
     """
     Blocking function — runs in thread executor.
@@ -194,11 +220,12 @@ async def process_frame_buffer(buffer: FrameBuffer) -> ProcessingResult:
 
     processing_time = int((time.time() - start) * 1000)
 
-    # ── Emotion detection placeholder ──
-    # TODO: integrate DeepFace/FER on the middle frame's face crop
-    dominant_emotion = "neutral"
-    emotion_scores = {e: round(random.uniform(0.01, 0.15), 3) for e in EMOTIONS}
-    emotion_scores[dominant_emotion] = round(random.uniform(0.5, 0.88), 3)
+    middle_frame = await loop.run_in_executor(
+        None, _decode_middle_frame_b64, frames_b64
+    )
+    dominant_emotion, emotion_scores = await loop.run_in_executor(
+        None, _detect_face_emotion, middle_frame
+    )
 
     if result_dict is not None:
         return ProcessingResult(

@@ -1,0 +1,23 @@
+# ANN-Based PSL Alphabet Recognition System — Dependencies
+# Python 3.8+ required
+
+# Core deep learning
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Numerical operations
+numpy>=1.23.0
+
+# Computer vision
+opencv-python>=4.7.0
+mediapipe>=0.10.0
+
+# Machine learning utilities
+scikit-learn>=1.2.0
+
+# Visualization
+matplotlib>=3.6.0
+
+# Testing
+hypothesis>=6.82.0
+pytest>=7.4.0

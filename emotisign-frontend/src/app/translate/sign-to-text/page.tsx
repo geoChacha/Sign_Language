@@ -15,9 +15,9 @@ import {
   FiSend,
 } from 'react-icons/fi';
 import Button from '@/components/ui/Button';
-import Select from '@/components/ui/Select';
+import EmotionBadge from '@/components/ui/EmotionBadge';
 import api from '@/lib/api';
-import { SignLanguage, ValidationState, PredictionResult } from '@/types';
+import { ValidationState, PredictionResult, Emotion } from '@/types';
 
 type PageState = 'idle' | 'validating' | 'countdown' | 'recording' | 'processing' | 'review' | 'done';
 type InputMode = 'record' | 'upload';
@@ -35,7 +35,6 @@ export default function SignToTextPage() {
 
   const [state, setState] = useState<PageState>('idle');
   const [inputMode, setInputMode] = useState<InputMode>('record');
-  const [signLanguage, setSignLanguage] = useState<SignLanguage>('ASL');
   const [validationState, setValidationState] = useState<ValidationState | null>(null);
   const [result, setResult] = useState<PredictionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -107,10 +106,8 @@ export default function SignToTextPage() {
     try {
       const formData = new FormData();
       formData.append('video', selectedFile);
-      // PSL endpoint does not use TTA — only append for ASL
-      if (signLanguage !== 'PSL') formData.append('use_tta', 'true');
-      const endpoint = signLanguage === 'PSL' ? 'psl-sign-to-text' : 'sign-to-text';
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ml/${endpoint}`, {
+      formData.append('use_tta', 'true');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ml/sign-to-text`, {
         method: 'POST',
         body: formData,
       });
@@ -127,7 +124,7 @@ export default function SignToTextPage() {
       toast.error(err.message || 'Failed to process video');
       setState('idle');
     }
-  }, [selectedFile, signLanguage]);
+  }, [selectedFile]);
 
   // ── Webcam validation ────────────────────────────────────────────────────
 
@@ -286,10 +283,8 @@ export default function SignToTextPage() {
       if (blob.size > 50 * 1024 * 1024) throw new Error('Video file is too large (max 50MB)');
       const formData = new FormData();
       formData.append('video', blob, 'recording.webm');
-      // PSL endpoint does not use TTA — only append for ASL
-      if (signLanguage !== 'PSL') formData.append('use_tta', 'true');
-      const endpoint = signLanguage === 'PSL' ? 'psl-sign-to-text' : 'sign-to-text';
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ml/${endpoint}`, {
+      formData.append('use_tta', 'true');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ml/sign-to-text`, {
         method: 'POST',
         body: formData,
       });
@@ -306,7 +301,7 @@ export default function SignToTextPage() {
       toast.error(err.message || 'Failed to process video');
       setState('review');
     }
-  }, [signLanguage]);
+  }, []);
 
   const reRecord = useCallback(() => {
     recordedChunksRef.current = [];
@@ -359,7 +354,6 @@ export default function SignToTextPage() {
   // ── Derived UI helpers ───────────────────────────────────────────────────
 
   const showIndicator = state === 'validating' || state === 'countdown' || state === 'recording';
-  const isActive = state === 'validating' || state === 'countdown' || state === 'recording' || state === 'processing';
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -477,7 +471,7 @@ export default function SignToTextPage() {
             {state === 'idle' && (
               <div className="camera-placeholder flex-col gap-2">
                 <FiCamera size={64} className="text-gray-400" />
-                <p className="mt-2 text-gray-500 text-sm">Click "Start" to begin</p>
+                <p className="mt-2 text-gray-500 text-sm">Click &quot;Start&quot; to begin</p>
               </div>
             )}
 
@@ -587,28 +581,6 @@ export default function SignToTextPage() {
 
         {/* ── Controls ── */}
         <div className="space-y-4">
-          <div className="flex justify-center">
-            <Select
-              value={signLanguage}
-              onChange={(e) => setSignLanguage(e.target.value as SignLanguage)}
-              options={[
-                { value: 'ASL', label: 'ASL - American Sign Language' },
-                { value: 'PSL', label: 'PSL - Pakistan Sign Language' },
-              ]}
-              className="w-64"
-              disabled={isActive}
-            />
-          </div>
-
-          {/* PSL mode badge */}
-          {signLanguage === 'PSL' && (
-            <div className="flex justify-center">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium bg-green-50 text-green-800 border border-green-200">
-                🇵🇰 PSL Mode — Recognises 12 Urdu signs
-              </span>
-            </div>
-          )}
-
           {state === 'idle' && (
             <div className="flex justify-center gap-4">
               <Button variant={inputMode === 'record' ? 'primary' : 'secondary'}
@@ -684,25 +656,15 @@ export default function SignToTextPage() {
           <div className="min-h-[120px]">
             {result ? (
               <>
-                {/* PSL mode: show Urdu text with RTL styling */}
-                {result.sign_language === 'PSL' ? (
-                  <>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
-                        🇵🇰 PSL - Pakistan Sign Language
-                      </span>
-                    </div>
-                    <p
-                      className="text-gray-800 text-3xl font-bold mb-4"
-                      dir="rtl"
-                      style={{ fontFamily: 'serif', letterSpacing: '0.05em' }}
-                    >
-                      {result.recognized_text}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-gray-800 text-2xl font-medium mb-4">{result.recognized_text}</p>
-                )}
+                <motion.div className="flex flex-wrap items-center gap-3 mb-4">
+                  <p className="text-gray-800 text-2xl font-medium">{result.recognized_text}</p>
+                  {result.emotion_from_video?.emotion && (
+                    <EmotionBadge
+                      emotion={result.emotion_from_video.emotion as Emotion}
+                      size="lg"
+                    />
+                  )}
+                </motion.div>
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <span>Confidence:</span>
@@ -713,39 +675,21 @@ export default function SignToTextPage() {
                     <span className="font-medium">{Math.round(result.confidence * 100)}%</span>
                   </div>
                   <div className="text-sm text-gray-600">
-                    {result.sign_language === 'PSL' ? (
-                      <>
-                        <p>Top Predictions:</p>
-                        <ul className="mt-2 space-y-1">
-                          {(result.top_predictions ?? []).map((pred: { label: string; confidence: number }, i: number) => (
-                            <li key={i} className="flex items-center gap-2">
-                              <span className="w-6 text-gray-400">{i + 1}.</span>
-                              <span className="flex-1 text-right" dir="rtl" style={{ fontFamily: 'serif' }}>{pred.label}</span>
-                              <div className="flex-1 max-w-[200px] bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-primary-400 h-1.5 rounded-full" style={{ width: `${pred.confidence * 100}%` }} />
-                              </div>
-                              <span className="w-12 text-right text-xs">{Math.round(pred.confidence * 100)}%</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    ) : (
-                      <>
-                        <p>Top 5 Predictions:</p>
-                        <ul className="mt-2 space-y-1">
-                          {result.top5_predictions.map(([, conf], i) => (
-                            <li key={i} className="flex items-center gap-2">
-                              <span className="w-6 text-gray-400">{i + 1}.</span>
-                              <span className="flex-1">{result.glosses[i]}</span>
-                              <div className="flex-1 max-w-[200px] bg-gray-200 rounded-full h-1.5">
-                                <div className="bg-primary-400 h-1.5 rounded-full" style={{ width: `${conf * 100}%` }} />
-                              </div>
-                              <span className="w-12 text-right text-xs">{Math.round(conf * 100)}%</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
+                    <>
+                      <p>Top 5 Predictions:</p>
+                      <ul className="mt-2 space-y-1">
+                        {result.top5_predictions.map(([, conf], i) => (
+                          <li key={i} className="flex items-center gap-2">
+                            <span className="w-6 text-gray-400">{i + 1}.</span>
+                            <span className="flex-1">{result.glosses[i]}</span>
+                            <div className="flex-1 max-w-[200px] bg-gray-200 rounded-full h-1.5">
+                              <div className="bg-primary-400 h-1.5 rounded-full" style={{ width: `${conf * 100}%` }} />
+                            </div>
+                            <span className="w-12 text-right text-xs">{Math.round(conf * 100)}%</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
                   </div>
                   <div className="text-xs text-gray-500 pt-2 border-t">
                     Processed {result.frame_count} frames in {result.processing_time_ms}ms

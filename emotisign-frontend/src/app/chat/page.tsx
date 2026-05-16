@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import {
   FiArrowLeft, FiSend, FiUser, FiPlus, FiSearch, FiX,
   FiMic, FiMicOff, FiCamera, FiStopCircle, FiVolume2, FiEye,
-  FiMessageSquare, FiWifi, FiWifiOff,
+  FiMessageSquare, FiWifi, FiWifiOff, FiUpload, FiVideo,
 } from 'react-icons/fi';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
@@ -30,6 +30,7 @@ export default function ChatPage() {
   const typingTimerRef = useRef<Record<number, NodeJS.Timeout>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const webcamRef = useRef<Webcam>(null);
+  const pslVideoRef = useRef<HTMLVideoElement>(null);
 
   // Rooms & messages
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
@@ -55,10 +56,26 @@ export default function ChatPage() {
 
   // Sign recorder modal
   const [showSignRecorder, setShowSignRecorder] = useState(false);
+  const [signChatMode, setSignChatMode] = useState<'asl' | 'psl'>('asl');
+  const [aslSubMode, setAslSubMode] = useState<'live' | 'video'>('live');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [recognizedText, setRecognizedText] = useState('');
   const [detectedEmotion, setDetectedEmotion] = useState<Emotion | null>(null);
+  const [pslLabel, setPslLabel] = useState('');
+  const [pslRecordedBlob, setPslRecordedBlob] = useState<Blob | null>(null);
+  const [isPslRecording, setIsPslRecording] = useState(false);
+  const [aslRecordedBlob, setAslRecordedBlob] = useState<Blob | null>(null);
+  const [aslSelectedFile, setAslSelectedFile] = useState<File | null>(null);
+  const [aslFilePreviewUrl, setAslFilePreviewUrl] = useState<string | null>(null);
+  const [isAslVideoRecording, setIsAslVideoRecording] = useState(false);
+  const [isUploadingSign, setIsUploadingSign] = useState(false);
+  const pslMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const aslMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const pslStreamRef = useRef<MediaStream | null>(null);
+  const pslChunksRef = useRef<Blob[]>([]);
+  const aslChunksRef = useRef<Blob[]>([]);
+  const aslVideoFileInputRef = useRef<HTMLInputElement>(null);
 
   // Speech-to-text
   const [isListening, setIsListening] = useState(false);
@@ -291,10 +308,147 @@ export default function ChatPage() {
   // ── Sign Recorder ─────────────────────────────────────────────────────
   const openSignRecorder = () => {
     setShowSignRecorder(true);
+    setSignChatMode('asl');
     setRecognizedText('');
     setDetectedEmotion(null);
     setRecordingTime(0);
     setIsRecording(false);
+    setPslLabel('');
+    setPslRecordedBlob(null);
+    setIsPslRecording(false);
+    setAslSubMode('live');
+    setAslRecordedBlob(null);
+    setAslSelectedFile(null);
+    setIsAslVideoRecording(false);
+  };
+
+  const needsCameraPreview =
+    showSignRecorder &&
+    ((signChatMode === 'psl') || (signChatMode === 'asl' && aslSubMode === 'video' && !aslSelectedFile));
+
+  // PSL / ASL video tab: webcam preview
+  useEffect(() => {
+    if (!needsCameraPreview) return;
+    let stream: MediaStream | null = null;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+        pslStreamRef.current = stream;
+        if (pslVideoRef.current) pslVideoRef.current.srcObject = stream;
+      } catch {
+        /* preview optional */
+      }
+    })();
+    return () => {
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+    };
+  }, [needsCameraPreview, signChatMode, aslSubMode, aslSelectedFile]);
+
+  useEffect(() => {
+    if (!aslSelectedFile) {
+      setAslFilePreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(aslSelectedFile);
+    setAslFilePreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [aslSelectedFile]);
+
+  const stopAslVideoRecording = useCallback(() => {
+    if (aslMediaRecorderRef.current?.state === 'recording') {
+      aslMediaRecorderRef.current.stop();
+    }
+    clearInterval(recordingTimerRef.current ?? undefined);
+    recordingTimerRef.current = null;
+    setIsAslVideoRecording(false);
+  }, []);
+
+  const startAslVideoRecording = async () => {
+    if (isAslVideoRecording) return;
+    setAslRecordedBlob(null);
+    setAslSelectedFile(null);
+    setRecordingTime(0);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      pslStreamRef.current = stream;
+      if (pslVideoRef.current) pslVideoRef.current.srcObject = stream;
+      aslChunksRef.current = [];
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : 'video/webm',
+      });
+      aslMediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) aslChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(aslChunksRef.current, { type: recorder.mimeType || 'video/webm' });
+        setAslRecordedBlob(blob);
+        stream.getTracks().forEach((t) => t.stop());
+        pslStreamRef.current = null;
+        if (pslVideoRef.current) pslVideoRef.current.srcObject = null;
+      };
+      recorder.start(200);
+      setIsAslVideoRecording(true);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    } catch {
+      toast.error('Could not access camera for recording');
+    }
+  };
+
+  const handleAslVideoFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const valid = ['video/mp4', 'video/webm', 'video/avi', 'video/quicktime'];
+    if (!valid.includes(file.type) && !file.name.match(/\.(mp4|webm|avi|mov)$/i)) {
+      toast.error('Use MP4, WEBM, AVI, or MOV');
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('Video must be under 50MB');
+      return;
+    }
+    stopAslVideoRecording();
+    setAslRecordedBlob(null);
+    setAslSelectedFile(file);
+    toast.success('Video selected');
+  };
+
+  const sendAslSignVideo = async () => {
+    const file =
+      aslSelectedFile ??
+      (aslRecordedBlob
+        ? new File([aslRecordedBlob], 'asl-sign.webm', { type: aslRecordedBlob.type || 'video/webm' })
+        : null);
+    if (!file || !selectedRoom || !chatWsRef.current?.isConnected()) {
+      toast.error('Record or upload an ASL video first');
+      return;
+    }
+    setIsUploadingSign(true);
+    try {
+      const { video_url } = await api.uploadChatSignVideo(selectedRoom.id, file);
+      chatWsRef.current.send({
+        type: 'sign_video',
+        video_url,
+        sign_language: 'ASL',
+        auto_translate: true,
+      });
+      toast.success('ASL video sent — translation will appear for your partner');
+      cancelSignRecording();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to send ASL video');
+    } finally {
+      setIsUploadingSign(false);
+    }
   };
 
   const startSignRecording = async () => {
@@ -365,17 +519,110 @@ export default function ChatPage() {
 
   const sendSignMessage = () => {
     if (!recognizedText.trim() || !chatWsRef.current?.isConnected()) return;
-    chatWsRef.current.send({ type: 'text', content: recognizedText, auto_translate: true });
+    const content = recognizedText.trim();
+    chatWsRef.current.send({ type: 'text', content, auto_translate: true });
     cancelSignRecording();
+    toast.success('ASL message sent');
+  };
+
+  const stopPslRecording = useCallback(() => {
+    if (pslMediaRecorderRef.current?.state === 'recording') {
+      pslMediaRecorderRef.current.stop();
+    }
+    clearInterval(recordingTimerRef.current ?? undefined);
+    recordingTimerRef.current = null;
+    setIsPslRecording(false);
+  }, []);
+
+  const startPslRecording = async () => {
+    if (isPslRecording) return;
+    setPslRecordedBlob(null);
+    setRecordingTime(0);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      pslStreamRef.current = stream;
+      if (pslVideoRef.current) {
+        pslVideoRef.current.srcObject = stream;
+      }
+      pslChunksRef.current = [];
+      const recorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : 'video/webm',
+      });
+      pslMediaRecorderRef.current = recorder;
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) pslChunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(pslChunksRef.current, { type: recorder.mimeType || 'video/webm' });
+        setPslRecordedBlob(blob);
+        stream.getTracks().forEach((t) => t.stop());
+        pslStreamRef.current = null;
+        if (pslVideoRef.current) {
+          pslVideoRef.current.srcObject = null;
+        }
+      };
+      recorder.start(200);
+      setIsPslRecording(true);
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((prev) => prev + 1);
+      }, 1000);
+    } catch {
+      toast.error('Could not access camera for recording');
+    }
+  };
+
+  const sendPslSignVideo = async () => {
+    if (!pslRecordedBlob || !pslLabel.trim() || !selectedRoom || !chatWsRef.current?.isConnected()) {
+      toast.error('Record a video and enter a label (letter or meaning)');
+      return;
+    }
+    setIsUploadingSign(true);
+    try {
+      const file = new File([pslRecordedBlob], 'psl-sign.webm', {
+        type: pslRecordedBlob.type || 'video/webm',
+      });
+      const { video_url } = await api.uploadChatSignVideo(selectedRoom.id, file);
+      chatWsRef.current.send({
+        type: 'sign_video',
+        video_url,
+        label: pslLabel.trim(),
+        sign_language: 'PSL',
+        auto_translate: false,
+      });
+      toast.success('PSL sign sent');
+      cancelSignRecording();
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to send PSL video');
+    } finally {
+      setIsUploadingSign(false);
+    }
   };
 
   const cancelSignRecording = useCallback(() => {
     stopSignRecording();
+    stopPslRecording();
+    stopAslVideoRecording();
+    if (pslStreamRef.current) {
+      pslStreamRef.current.getTracks().forEach((t) => t.stop());
+      pslStreamRef.current = null;
+    }
     setShowSignRecorder(false);
     setRecognizedText('');
     setDetectedEmotion(null);
     setRecordingTime(0);
-  }, [stopSignRecording]);
+    setPslLabel('');
+    setPslRecordedBlob(null);
+    setIsPslRecording(false);
+    setAslSubMode('live');
+    setAslRecordedBlob(null);
+    setAslSelectedFile(null);
+    setIsAslVideoRecording(false);
+  }, [stopSignRecording, stopPslRecording, stopAslVideoRecording]);
 
   // ── Speech-to-Text ────────────────────────────────────────────────────
   const startSpeechToText = () => {
@@ -640,9 +887,21 @@ export default function ChatPage() {
                             <div className={`chat-bubble ${isMine ? 'chat-bubble-sent ml-auto' : 'chat-bubble-received'}`}>
                               {message.message_type === 'sign_video' && message.video_path ? (
                                 <div>
-                                  <video src={message.video_path} controls className="max-w-full rounded-lg" />
-                                  {message.translated_text && (
-                                    <p className="mt-2 text-sm opacity-80">{message.translated_text}</p>
+                                  <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full bg-primary-100 text-primary-800 mb-2">
+                                    {(message.sign_language || 'ASL').toString().toUpperCase()}
+                                  </span>
+                                  <video
+                                    src={api.mediaUrl(message.video_path)}
+                                    controls
+                                    playsInline
+                                    className="max-w-full rounded-lg max-h-64 block"
+                                  />
+                                  {(message.text_content || message.translated_text) && (
+                                    <p className="mt-2 text-sm font-medium">
+                                      {message.sign_language === 'PSL'
+                                        ? `Label: ${message.text_content || message.translated_text}`
+                                        : message.translated_text || message.text_content}
+                                    </p>
                                   )}
                                 </div>
                               ) : (
@@ -656,7 +915,7 @@ export default function ChatPage() {
                               <span className="text-xs text-gray-400">
                                 {format(new Date(message.created_at), 'HH:mm')}
                               </span>
-                              {message.text_content && (
+                              {message.text_content && message.message_type !== 'sign_video' && (
                                 <>
                                   <button
                                     onClick={() => viewSignTranslation(message.text_content!)}
@@ -847,59 +1106,100 @@ export default function ChatPage() {
               className="bg-white rounded-xl shadow-xl w-full max-w-lg"
             >
               <div className="p-4 border-b flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Sign Language Recording</h2>
+                <h2 className="text-lg font-semibold text-gray-900">Send Sign Language</h2>
                 <button onClick={cancelSignRecording} className="p-1 hover:bg-gray-100 rounded-lg">
                   <FiX size={20} />
                 </button>
               </div>
-              <div className="p-4 space-y-4">
-                <div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
-                  <Webcam
-                    ref={webcamRef}
-                    audio={false}
-                    screenshotFormat="image/jpeg"
-                    videoConstraints={{ facingMode: 'user', width: 640, height: 480 }}
-                    className="w-full h-full object-cover"
-                    mirrored
-                  />
-                  {isRecording && (
-                    <div className="absolute top-3 left-3 flex items-center gap-2 bg-red-600/90 text-white px-3 py-1 rounded-full text-sm">
+              <motion.div className="p-4 space-y-4">
+                <motion.div className="flex rounded-lg bg-gray-100 p-1 gap-1">
+                  <button type="button" onClick={() => { stopSignRecording(); stopPslRecording(); stopAslVideoRecording(); setSignChatMode('asl'); }} className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${signChatMode === 'asl' ? 'bg-white shadow text-primary-700' : 'text-gray-600'}`}>ASL</button>
+                  <button type="button" onClick={() => { stopSignRecording(); stopPslRecording(); stopAslVideoRecording(); setSignChatMode('psl'); }} className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${signChatMode === 'psl' ? 'bg-white shadow text-primary-700' : 'text-gray-600'}`}>PSL</button>
+                </motion.div>
+                {signChatMode === 'asl' && (
+                  <div className="flex rounded-lg border border-gray-200 p-0.5 gap-0.5">
+                    <button type="button" onClick={() => { stopAslVideoRecording(); setAslSubMode('live'); setAslRecordedBlob(null); setAslSelectedFile(null); }} className={`flex-1 py-1.5 text-xs font-medium rounded ${aslSubMode === 'live' ? 'bg-primary-50 text-primary-700' : 'text-gray-500'}`}>Live camera</button>
+                    <button type="button" onClick={() => { stopSignRecording(); setAslSubMode('video'); }} className={`flex-1 py-1.5 text-xs font-medium rounded ${aslSubMode === 'video' ? 'bg-primary-50 text-primary-700' : 'text-gray-500'}`}>Record / upload video</button>
+                  </div>
+                )}
+                <p className="text-xs text-gray-500">
+                  {signChatMode === 'asl' && aslSubMode === 'live' && 'ASL live: sign to the camera, then send recognized text.'}
+                  {signChatMode === 'asl' && aslSubMode === 'video' && 'ASL video: record or upload a clip; AI translates signs when you send.'}
+                  {signChatMode === 'psl' && 'PSL: record a clip, add a label, and send the video.'}
+                </p>
+                <motion.div className="relative bg-gray-900 rounded-lg overflow-hidden aspect-video">
+                  {signChatMode === 'asl' && aslSubMode === 'live' ? (
+                    <Webcam ref={webcamRef} audio={false} screenshotFormat="image/jpeg" videoConstraints={{ facingMode: 'user', width: 640, height: 480 }} className="w-full h-full object-cover" mirrored />
+                  ) : signChatMode === 'asl' && aslSubMode === 'video' && aslFilePreviewUrl ? (
+                    <video src={aslFilePreviewUrl} controls className="w-full h-full object-contain bg-black" />
+                  ) : (
+                    <video ref={pslVideoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+                  )}
+                  {(isRecording || isPslRecording || isAslVideoRecording) && (
+                    <motion.div className="absolute top-3 left-3 flex items-center gap-2 bg-red-600/90 text-white px-3 py-1 rounded-full text-sm">
                       <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
                       REC {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')}
-                    </div>
+                    </motion.div>
                   )}
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-3 min-h-[60px]">
-                  <p className="text-xs text-gray-500 mb-1">Recognized Text:</p>
-                  <p className="text-gray-900 text-sm">
-                    {recognizedText || (isRecording ? 'Translating signs...' : 'Press Start to begin')}
-                  </p>
-                  {detectedEmotion && (
-                    <div className="mt-2"><EmotionBadge emotion={detectedEmotion} size="sm" /></div>
-                  )}
-                </div>
-
-                <div className="flex gap-3">
-                  {!isRecording ? (
-                    <Button onClick={startSignRecording} className="flex-1" leftIcon={<FiCamera size={16} />}>
-                      Start Recording
-                    </Button>
-                  ) : (
-                    <Button onClick={stopSignRecording} variant="danger" className="flex-1" leftIcon={<FiStopCircle size={16} />}>
-                      Stop
-                    </Button>
-                  )}
-                  <Button
-                    onClick={sendSignMessage}
-                    disabled={!recognizedText.trim() || !chatWsRef.current?.isConnected()}
-                    className="flex-1"
-                    leftIcon={<FiSend size={16} />}
-                  >
-                    Send
-                  </Button>
-                </div>
-              </div>
+                </motion.div>
+                {signChatMode === 'asl' && aslSubMode === 'live' ? (
+                  <>
+                    <motion.div className="bg-gray-50 rounded-lg p-3 min-h-[60px]">
+                      <p className="text-xs text-gray-500 mb-1">Recognized text (ASL)</p>
+                      <p className="text-gray-900 text-sm">{recognizedText || (isRecording ? 'Translating signs…' : 'Press Start live')}</p>
+                      {detectedEmotion && <motion.div className="mt-2"><EmotionBadge emotion={detectedEmotion} size="sm" /></motion.div>}
+                    </motion.div>
+                    <motion.div className="flex gap-3">
+                      {!isRecording ? (
+                        <Button onClick={startSignRecording} className="flex-1" leftIcon={<FiCamera size={16} />}>Start live</Button>
+                      ) : (
+                        <Button onClick={stopSignRecording} variant="danger" className="flex-1" leftIcon={<FiStopCircle size={16} />}>Stop</Button>
+                      )}
+                      <Button onClick={sendSignMessage} disabled={!recognizedText.trim() || !chatWsRef.current?.isConnected()} className="flex-1" leftIcon={<FiSend size={16} />}>Send text</Button>
+                    </motion.div>
+                  </>
+                ) : signChatMode === 'asl' && aslSubMode === 'video' ? (
+                  <>
+                    {(aslRecordedBlob || aslSelectedFile) && !isAslVideoRecording && (
+                      <p className="text-xs text-green-700">
+                        {aslSelectedFile
+                          ? `Selected: ${aslSelectedFile.name}`
+                          : `Recording ready (${(aslRecordedBlob!.size / 1024).toFixed(0)} KB)`}
+                      </p>
+                    )}
+                    <input ref={aslVideoFileInputRef} type="file" accept="video/mp4,video/webm,video/avi,video/mov" className="hidden" onChange={handleAslVideoFile} />
+                    <motion.div className="flex flex-wrap gap-2">
+                      {!isAslVideoRecording ? (
+                        <Button onClick={startAslVideoRecording} className="flex-1 min-w-[100px]" leftIcon={<FiCamera size={16} />} disabled={!!aslRecordedBlob || !!aslSelectedFile}>Record</Button>
+                      ) : (
+                        <Button onClick={stopAslVideoRecording} variant="danger" className="flex-1" leftIcon={<FiStopCircle size={16} />}>Stop</Button>
+                      )}
+                      <Button variant="secondary" onClick={() => aslVideoFileInputRef.current?.click()} leftIcon={<FiUpload size={16} />} disabled={isAslVideoRecording}>Upload</Button>
+                      {(aslRecordedBlob || aslSelectedFile) && !isAslVideoRecording && (
+                        <Button variant="secondary" onClick={() => { setAslRecordedBlob(null); setAslSelectedFile(null); setRecordingTime(0); }}>Clear</Button>
+                      )}
+                      <Button onClick={sendAslSignVideo} disabled={(!aslRecordedBlob && !aslSelectedFile) || !chatWsRef.current?.isConnected() || isUploadingSign} isLoading={isUploadingSign} className="flex-1 min-w-[100px]" leftIcon={<FiVideo size={16} />}>Send video</Button>
+                    </motion.div>
+                  </>
+                ) : (
+                  <>
+                    <motion.div>
+                      <label className="text-xs text-gray-500 block mb-1">Sign label (Urdu letter or meaning)</label>
+                      <input type="text" value={pslLabel} onChange={(e) => setPslLabel(e.target.value)} placeholder="e.g. ا or hello" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary-200 outline-none" dir="auto" />
+                    </motion.div>
+                    {pslRecordedBlob && !isPslRecording && <p className="text-xs text-green-700">Video ready ({(pslRecordedBlob.size / 1024).toFixed(0)} KB)</p>}
+                    <motion.div className="flex flex-wrap gap-3">
+                      {!isPslRecording ? (
+                        <Button onClick={startPslRecording} className="flex-1 min-w-[120px]" leftIcon={<FiCamera size={16} />} disabled={!!pslRecordedBlob}>{pslRecordedBlob ? 'Recorded' : 'Record'}</Button>
+                      ) : (
+                        <Button onClick={stopPslRecording} variant="danger" className="flex-1" leftIcon={<FiStopCircle size={16} />}>Stop</Button>
+                      )}
+                      {pslRecordedBlob && !isPslRecording && <Button variant="secondary" onClick={() => { setPslRecordedBlob(null); setRecordingTime(0); }}>Re-record</Button>}
+                      <Button onClick={sendPslSignVideo} disabled={!pslRecordedBlob || !pslLabel.trim() || !chatWsRef.current?.isConnected() || isUploadingSign} isLoading={isUploadingSign} className="flex-1 min-w-[120px]" leftIcon={<FiSend size={16} />}>Send video</Button>
+                    </motion.div>
+                  </>
+                )}
+              </motion.div>
             </motion.div>
           </motion.div>
         )}

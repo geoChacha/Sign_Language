@@ -14,12 +14,16 @@ WebSocket:
 """
 
 import json
+import os
+import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
+import aiofiles
 from fastapi import (
     APIRouter, Depends, HTTPException, Query,
-    WebSocket, WebSocketDisconnect
+    WebSocket, WebSocketDisconnect, UploadFile, File,
 )
 from jose import JWTError
 from sqlalchemy import select, func, update
@@ -37,9 +41,14 @@ from app.schemas import (
 )
 from app.services.auth_service import decode_token
 from app.services.ws_manager import manager
+from app.config import settings
 from app.ml.ml_service import analyze_sentiment, text_to_sign, sign_to_text
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
+
+CHAT_VIDEO_DIR = Path("uploads/chat_videos")
+ALLOWED_CHAT_VIDEO_TYPES = {"video/mp4", "video/webm", "video/avi", "video/quicktime"}
+MAX_CHAT_VIDEO_BYTES = settings.MAX_VIDEO_SIZE_MB * 1024 * 1024
 
 
 # ─────────────────────────── Helpers ───────────────────────────
@@ -57,6 +66,14 @@ async def _assert_member(db: AsyncSession, room_id: int, user_id: int):
 
 
 def _msg_to_dict(msg: ChatMessage, sender_username: str = None) -> dict:
+    sign_language = None
+    if msg.sign_data:
+        try:
+            meta = json.loads(msg.sign_data)
+            if isinstance(meta, dict):
+                sign_language = meta.get("sign_language")
+        except json.JSONDecodeError:
+            pass
     return {
         "id": msg.id,
         "room_id": msg.room_id,
@@ -67,11 +84,26 @@ def _msg_to_dict(msg: ChatMessage, sender_username: str = None) -> dict:
         "translated_text": msg.translated_text,
         "sign_data": msg.sign_data,
         "video_path": msg.video_path,
+        "sign_language": sign_language,
         "emotion": msg.emotion.value if msg.emotion else None,
         "sentiment_label": msg.sentiment_label,
         "is_read": msg.is_read,
         "created_at": msg.created_at.isoformat()
     }
+
+
+def _video_url_to_disk_path(video_url: str) -> Optional[str]:
+    """Map /uploads/chat_videos/foo.webm → local filesystem path."""
+    if not video_url:
+        return None
+    path = video_url.split("?", 1)[0]
+    if path.startswith("/uploads/"):
+        path = path.lstrip("/")
+    elif path.startswith("uploads/"):
+        pass
+    else:
+        return None
+    return path if os.path.isfile(path) else None
 
 
 # ─────────────────────────── REST: Rooms ───────────────────────────
@@ -206,6 +238,44 @@ async def mark_as_read(
     )
     await db.commit()
     return SuccessResponse(message="Messages marked as read")
+
+
+@router.post("/rooms/{room_id}/sign-video")
+async def upload_chat_sign_video(
+    room_id: int,
+    video: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Upload a sign-language video clip for chat (PSL record-and-send or ASL video).
+    Returns a URL path served under /uploads/.
+    """
+    await _assert_member(db, room_id, current_user.id)
+
+    if video.content_type and video.content_type not in ALLOWED_CHAT_VIDEO_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid video format. Use MP4, WEBM, AVI, or MOV.",
+        )
+
+    content = await video.read()
+    if len(content) > MAX_CHAT_VIDEO_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Video too large (max {settings.MAX_VIDEO_SIZE_MB}MB).",
+        )
+
+    CHAT_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+    ext = Path(video.filename or "clip.webm").suffix or ".webm"
+    filename = f"{uuid.uuid4()}{ext}"
+    disk_path = CHAT_VIDEO_DIR / filename
+
+    async with aiofiles.open(disk_path, "wb") as f:
+        await f.write(content)
+
+    video_url = f"/uploads/chat_videos/{filename}"
+    return {"video_url": video_url, "filename": filename}
 
 
 # ─────────────────────────── WebSocket Chat ───────────────────────────
@@ -382,20 +452,53 @@ async def websocket_chat(
                 )
                 continue
 
-            # ── SIGN VIDEO URL ──
-            if event_type == "sign_video_url":
+            # ── SIGN VIDEO (uploaded clip + optional label) ──
+            if event_type in ("sign_video_url", "sign_video"):
                 video_url = data.get("video_url", "").strip()
                 if not video_url:
                     continue
 
-                auto_translate = data.get("auto_translate", True)
+                label = (data.get("label") or data.get("content") or "").strip()
+                sign_language = (data.get("sign_language") or "ASL").upper()
+                auto_translate = data.get("auto_translate", sign_language == "ASL")
 
-                recognized_text = None
+                recognized_text = label
                 emotion_val = Emotion.UNKNOWN
-                if auto_translate:
-                    # In real impl: download video or use path, run sign_to_text
-                    sign_result = await sign_to_text(video_url, "ASL")
-                    recognized_text = sign_result["recognized_text"]
+
+                disk_path = _video_url_to_disk_path(video_url)
+
+                if sign_language == "ASL" and auto_translate and disk_path:
+                    try:
+                        sign_result = await sign_to_text(disk_path, "ASL")
+                        if sign_result.get("recognized_text"):
+                            recognized_text = sign_result["recognized_text"]
+                        try:
+                            from app.ml.face_emotion_service import detect_emotion_from_video_async
+                            emo = await detect_emotion_from_video_async(disk_path)
+                            dom = emo.get("emotion", "neutral")
+                            emotion_val = (
+                                Emotion(dom)
+                                if dom in Emotion._value2member_map_
+                                else Emotion.UNKNOWN
+                            )
+                        except Exception:
+                            pass
+                    except Exception:
+                        if not recognized_text:
+                            recognized_text = "(ASL video — translation unavailable)"
+                elif sign_language == "PSL":
+                    if not label:
+                        await manager.send_to_user(
+                            room_id, user_id,
+                            manager.build_event(
+                                "error",
+                                {"detail": "PSL messages require a label describing the sign."},
+                            ),
+                        )
+                        continue
+                    recognized_text = label
+
+                meta = json.dumps({"sign_language": sign_language})
 
                 async with AsyncSessionLocal() as db:
                     msg = ChatMessage(
@@ -403,8 +506,10 @@ async def websocket_chat(
                         sender_id=user_id,
                         message_type=MessageType.SIGN_VIDEO,
                         video_path=video_url,
+                        text_content=label or recognized_text,
                         translated_text=recognized_text,
-                        emotion=emotion_val
+                        sign_data=meta,
+                        emotion=emotion_val,
                     )
                     db.add(msg)
                     await db.commit()

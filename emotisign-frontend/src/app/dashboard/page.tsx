@@ -66,6 +66,28 @@ const connectionOptions = [
     ),
     color: 'green',
   },
+  {
+    id: 'psl-alphabet',
+    title: 'PSL Alphabet (Live)',
+    description: 'Recognise Pakistan Sign Language alphabet letters in real-time using your webcam.',
+    href: '/translate/psl-alphabet',
+    icon: (
+      <svg viewBox="0 0 80 60" className="w-20 h-16">
+        <g fill="none" stroke="#065f46" strokeWidth="2">
+          {/* Hand outline */}
+          <path d="M30 45 L30 25 Q30 22 33 22 Q36 22 36 25 L36 32" />
+          <path d="M36 28 Q36 24 39 24 Q42 24 42 28 L42 32" />
+          <path d="M42 29 Q42 25 45 25 Q48 25 48 29 L48 33" />
+          <path d="M48 32 Q48 28 51 28 Q54 28 54 32 L54 40 Q54 48 46 50 L34 50 Q26 50 26 42 L26 38 Q26 34 30 34" />
+          {/* Flag crescent */}
+          <circle cx="18" cy="15" r="7" stroke="#065f46" />
+          <circle cx="20" cy="13" r="5" fill="white" stroke="white" />
+          <circle cx="22" cy="10" r="2" fill="#065f46" stroke="none" />
+        </g>
+      </svg>
+    ),
+    color: 'green',
+  },
 ];
 
 export default function DashboardPage() {

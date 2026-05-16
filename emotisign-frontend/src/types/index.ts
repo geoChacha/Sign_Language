@@ -102,6 +102,7 @@ export interface ChatMessage {
   translated_text: string | null;
   sign_data: string | null;
   video_path: string | null;
+  sign_language?: SignLanguage | string | null;
   emotion: Emotion | null;
   sentiment_label: string | null;
   is_read: boolean;
@@ -211,6 +212,7 @@ export interface PredictionResult {
   frame_count: number;
   processing_time_ms: number;
   sign_language: string;
+  emotion_from_video?: EmotionAnalysis;
   // PSL-specific fields (Pakistan Sign Language)
   urdu_label?: string;
   top_predictions?: { label: string; confidence: number }[];

@@ -5,6 +5,7 @@ Endpoints:
 - POST /api/ml/sign-to-text - Upload video for ASL recognition
 - POST /api/ml/validate-environment - Validate recording environment
 - GET /api/ml/stats - Get ML service statistics
+- GET /api/ml/health - Health check
 """
 
 import os
@@ -17,7 +18,6 @@ import cv2
 import numpy as np
 
 from ..ml.wlasl_service import get_wlasl_service, WLASLModelService
-from ..ml.psl_service import get_psl_service, PSLModelService
 from ..services.environment_validator import get_validator, EnvironmentValidator
 
 
@@ -104,6 +104,12 @@ async def sign_to_text_endpoint(
         # Process video
         try:
             result = await ml_service.sign_to_text(temp_path, use_tta=use_tta)
+            try:
+                from app.ml.ml_service import detect_emotion_from_video
+                emotion = await detect_emotion_from_video(temp_path)
+                result["emotion_from_video"] = emotion
+            except Exception as emo_err:
+                logger.warning(f"Face emotion detection skipped: {emo_err}")
             return JSONResponse(content=result)
             
         except FileNotFoundError as e:
@@ -253,100 +259,3 @@ async def health_check(
     })
 
 
-# ── PSL dependency ────────────────────────────────────────────────────────────
-
-async def get_psl_service_dep() -> PSLModelService:
-    """Dependency to get PSL model service."""
-    return await get_psl_service()
-
-
-@router.post("/psl-sign-to-text")
-async def psl_sign_to_text_endpoint(
-    video: UploadFile = File(..., description="Video file containing PSL signs"),
-    psl_service: PSLModelService = Depends(get_psl_service_dep),
-):
-    """
-    Process uploaded video and return PSL (Pakistan Sign Language) translation.
-
-    Recognises 12 Urdu signs using a frame-by-frame MLP classifier with
-    weighted majority voting.
-
-    **Request:**
-    - video: multipart/form-data video file (MP4, AVI, MOV, WEBM, max 50 MB)
-
-    **Response:**
-    ```json
-    {
-        "recognized_text": "شکریہ",
-        "urdu_label": "شکریہ",
-        "confidence": 0.85,
-        "top_predictions": [{"label": "شکریہ", "confidence": 0.85}, ...],
-        "frame_count": 45,
-        "processing_time_ms": 234,
-        "sign_language": "PSL"
-    }
-    ```
-
-    **Errors:**
-    - 400: Invalid video format or file too large
-    - 500: Processing error
-    """
-    # Validate file format
-    allowed_formats = {".mp4", ".avi", ".mov", ".webm"}
-    file_ext = os.path.splitext(video.filename or "video.mp4")[1].lower()
-    if not file_ext:
-        file_ext = ".mp4"  # default for blobs without extension
-
-    if file_ext not in allowed_formats:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported video format: {file_ext}. "
-                   f"Allowed formats: {', '.join(allowed_formats)}",
-        )
-
-    # Validate file size (max 50 MB)
-    max_size_mb = int(os.getenv("MAX_VIDEO_SIZE_MB", "50"))
-    max_size_bytes = max_size_mb * 1024 * 1024
-
-    temp_file = None
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
-            content = await video.read()
-
-            if len(content) > max_size_bytes:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"File too large. Maximum size: {max_size_mb}MB",
-                )
-
-            temp_file.write(content)
-            temp_path = temp_file.name
-
-        logger.info(f"PSL: processing video {video.filename} ({len(content)} bytes)")
-
-        try:
-            result = await psl_service.predict_from_video(temp_path)
-            return JSONResponse(content=result)
-
-        except FileNotFoundError as e:
-            logger.error(f"PSL video file not found: {e}")
-            raise HTTPException(status_code=400, detail="Unable to process video file")
-
-        except ValueError as e:
-            logger.error(f"PSL video processing error: {e}")
-            raise HTTPException(status_code=400, detail=str(e))
-
-        except Exception as e:
-            logger.error(f"PSL inference error: {e}", exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail="Internal error during PSL video processing",
-            )
-
-    finally:
-        if temp_path and os.path.exists(temp_path):
-            try:
-                os.unlink(temp_path)
-            except Exception as e:
-                logger.warning(f"Failed to delete PSL temp file: {e}")

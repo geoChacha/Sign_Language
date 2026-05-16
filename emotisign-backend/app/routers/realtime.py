@@ -409,3 +409,130 @@ async def ws_text_to_sign(
 
     except WebSocketDisconnect:
         pass
+
+
+# ── WebSocket: PSL Live Alphabet Recognition ─────────────────────────────────
+
+@router.websocket("/psl-live")
+async def ws_psl_live(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time PSL alphabet recognition.
+
+    Full path: ws://<host>/ws/translate/psl-live
+
+    Protocol:
+      Client → Server:
+        { "type": "frame",  "data": "<base64 JPEG>", "mime": "image/jpeg" }
+        { "type": "config", "confidence_threshold": 0.70 }
+        { "type": "stop" }
+        { "type": "ping" }
+
+      Server → Client:
+        { "event": "connected",       "message": "...", "timestamp": ... }
+        { "event": "result",          "data": { predicted_label, urdu_text, confidence, landmarks }, "timestamp": ... }
+        { "event": "no_hand",         "message": "...", "timestamp": ... }
+        { "event": "low_confidence",  "data": { predicted_label, confidence }, "timestamp": ... }
+        { "event": "error",           "message": "...", "timestamp": ... }
+        { "event": "session_end",     "data": { stats... }, "timestamp": ... }
+        { "event": "pong",            "timestamp": ... }
+    """
+    import base64
+    import numpy as np
+    import cv2
+    from app.ml.psl_live_service import get_psl_live_service
+
+    await websocket.accept()
+
+    service = get_psl_live_service()
+    session_start = time.time()
+
+    try:
+        await service.load_model()
+    except Exception as e:
+        await websocket.send_json({
+            "event": "error",
+            "message": f"PSL model failed to load: {e}",
+            "timestamp": time.time(),
+        })
+        await websocket.close()
+        return
+
+    await websocket.send_json({
+        "event": "connected",
+        "message": "PSL live inference session started",
+        "timestamp": time.time(),
+    })
+
+    try:
+        while True:
+            try:
+                msg = await asyncio.wait_for(websocket.receive_json(), timeout=30.0)
+            except asyncio.TimeoutError:
+                await websocket.send_json({"event": "pong", "timestamp": time.time()})
+                continue
+
+            msg_type = msg.get("type", "")
+
+            if msg_type == "frame":
+                try:
+                    frame_b64 = msg.get("data", "")
+                    frame_bytes = base64.b64decode(frame_b64)
+                    arr = np.frombuffer(frame_bytes, dtype=np.uint8)
+                    frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    if frame is None:
+                        raise ValueError("cv2.imdecode returned None")
+                except Exception as decode_err:
+                    await websocket.send_json({
+                        "event": "error",
+                        "message": f"Frame decode failed: {decode_err}",
+                        "timestamp": time.time(),
+                    })
+                    continue
+
+                result = await service.predict(frame)
+                await websocket.send_json(result)
+
+            elif msg_type == "config":
+                threshold = msg.get("confidence_threshold", 0.70)
+                service.confidence_threshold = float(threshold)
+
+            elif msg_type == "stop":
+                stats = service.get_session_stats()
+                stats["session_duration_seconds"] = round(time.time() - session_start, 2)
+                await websocket.send_json({
+                    "event": "session_end",
+                    "data": stats,
+                    "timestamp": time.time(),
+                })
+                break
+
+            elif msg_type == "ping":
+                await websocket.send_json({"event": "pong", "timestamp": time.time()})
+
+            else:
+                await websocket.send_json({
+                    "event": "error",
+                    "message": f"Unknown message type: {msg_type}",
+                    "timestamp": time.time(),
+                })
+
+    except WebSocketDisconnect:
+        stats = service.get_session_stats()
+        import logging as _log
+        _log.getLogger(__name__).info(
+            f"PSL live session ended: {stats['total_frames']} frames, "
+            f"{stats['predictions_made']} predictions"
+        )
+    except Exception as e:
+        import logging as _log
+        _log.getLogger(__name__).error(f"PSL live session error: {e}", exc_info=True)
+        try:
+            await websocket.send_json({
+                "event": "error",
+                "message": str(e),
+                "timestamp": time.time(),
+            })
+        except Exception:
+            pass
+    finally:
+        service.close()

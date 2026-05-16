@@ -149,7 +149,7 @@ export default function SettingsPage() {
                       {content}
                     </Link>
                   ) : (
-                    <div key={item.id} onClick={() => toast.info('Coming soon')}>
+                    <div key={item.id} onClick={() => toast('Coming soon')}>
                       {content}
                     </div>
                   );
@@ -169,7 +169,7 @@ export default function SettingsPage() {
 
             {!isGuest && (
               <button
-                onClick={() => toast.info('Contact support to delete your account')}
+                onClick={() => toast('Contact support to delete your account')}
                 className="flex items-center p-4 w-full border-t hover:bg-red-50 transition-colors text-red-600"
               >
                 <FiTrash2 size={20} className="mr-4" />

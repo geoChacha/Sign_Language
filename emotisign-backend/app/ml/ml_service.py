@@ -172,40 +172,10 @@ async def analyze_sentiment(text: str) -> dict:
 
 async def detect_emotion_from_video(video_path: str) -> dict:
     """
-    Detect emotion from signer's facial expressions in the video.
+    Detect happy / sad / neutral from the signer's face across a video.
 
-    PLACEHOLDER — returns mock emotion.
-
-    REAL IMPLEMENTATION:
-      1. Sample frames from the video (every N frames)
-      2. Detect face in each frame (MTCNN or OpenCV Haar cascades)
-      3. Crop face region
-      4. Run emotion classifier on face crop:
-         - Option A: DeepFace library (wraps multiple models)
-         - Option B: FER (Facial Expression Recognition) library
-         - Option C: Custom CNN trained on AffectNet / RAF-DB
-      5. Aggregate per-frame predictions (majority vote or average)
-      6. Return dominant emotion + per-frame breakdown
-
-    Returns:
-      {
-        "dominant_emotion": str,
-        "emotion_scores": {emotion: avg_prob, ...},
-        "frame_samples": int,
-        "processing_time_ms": int
-      }
+    Uses MediaPipe Face Mesh (see face_emotion_service.py).
     """
-    start = time.time()
-    await asyncio.sleep(0.15)
+    from app.ml.face_emotion_service import detect_emotion_from_video_async
 
-    dominant = random.choice(EMOTIONS)
-    emotion_scores = {e: round(random.uniform(0.01, 0.15), 3) for e in EMOTIONS}
-    emotion_scores[dominant] = round(random.uniform(0.45, 0.88), 3)
-
-    return {
-        "dominant_emotion": dominant,
-        "emotion_scores": emotion_scores,
-        "frame_samples": random.randint(5, 30),
-        "processing_time_ms": int((time.time() - start) * 1000),
-        "note": "PLACEHOLDER — integrate DeepFace/FER model here"
-    }
+    return await detect_emotion_from_video_async(video_path)

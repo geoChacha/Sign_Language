@@ -5,7 +5,6 @@ import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { FiSend, FiMic, FiMicOff, FiInfo } from 'react-icons/fi';
 import Button from '@/components/ui/Button';
-import Select from '@/components/ui/Select';
 import EmotionBadge from '@/components/ui/EmotionBadge';
 import SkeletonCanvas from '@/components/ui/SkeletonCanvas';
 import api from '@/lib/api';
@@ -32,7 +31,7 @@ export default function TextToSignPage() {
   const signTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [state, setState] = useState<TranslationState>('idle');
-  const [signLanguage, setSignLanguage] = useState<SignLanguage>('ASL');
+  const signLanguage: SignLanguage = 'ASL';
   const [inputText, setInputText] = useState('');
   const [displayText, setDisplayText] = useState('');
   const [currentWord, setCurrentWord] = useState('');
@@ -200,18 +199,9 @@ export default function TextToSignPage() {
           )}
         </div>
 
-        {/* ── Language selector ── */}
-        <div className="flex justify-center mt-4">
-          <Select
-            value={signLanguage}
-            onChange={(e) => setSignLanguage(e.target.value as SignLanguage)}
-            options={[
-              { value: 'ASL', label: 'ASL - American Sign Language' },
-              { value: 'PSL', label: 'PSL - Pakistan Sign Language' },
-            ]}
-            className="w-64"
-          />
-        </div>
+        <p className="text-center text-white/60 text-sm mt-4">
+          American Sign Language (ASL) — 100-word vocabulary
+        </p>
 
         {/* ── Input panel ── */}
         <motion.div
