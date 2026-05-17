@@ -30,6 +30,7 @@ export default function SignToTextPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const validationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -243,12 +244,11 @@ export default function SignToTextPage() {
       setState('recording');
 
       const startTime = Date.now();
-      const timerInterval = setInterval(() => {
+      timerIntervalRef.current = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         setRecordingTime(elapsed);
-        if (elapsed >= 30) {
+        if (elapsed >= 5) {
           stopRecording();
-          clearInterval(timerInterval);
         }
       }, 1000);
     } catch {
@@ -258,6 +258,11 @@ export default function SignToTextPage() {
   }, []);
 
   const stopRecording = useCallback(() => {
+    // Clear timer so it stops ticking after recording ends
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
     // Capture thumbnail from current video frame before stopping
     if (videoRef.current && videoRef.current.videoWidth > 0) {
       const canvas = document.createElement('canvas');
@@ -284,6 +289,7 @@ export default function SignToTextPage() {
       const formData = new FormData();
       formData.append('video', blob, 'recording.webm');
       formData.append('use_tta', 'true');
+      formData.append('is_webcam_recording', 'true');
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ml/sign-to-text`, {
         method: 'POST',
         body: formData,
@@ -347,6 +353,7 @@ export default function SignToTextPage() {
     return () => {
       if (validationIntervalRef.current) clearInterval(validationIntervalRef.current);
       if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
     };
   }, []);
@@ -443,7 +450,7 @@ export default function SignToTextPage() {
             {state === 'recording' && (
               <div className="recording-indicator">
                 <div className="recording-dot" />
-                <span>Recording {recordingTime}s</span>
+                <span>Recording {recordingTime}s / 5s</span>
               </div>
             )}
 
@@ -543,43 +550,16 @@ export default function SignToTextPage() {
           )}
         </div>
 
-        {/* ── Validation feedback ── */}
-        {(state === 'validating' || state === 'countdown' || state === 'recording') && validationState && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-lg p-4 shadow-md">
-            <h4 className="font-semibold text-gray-900 mb-3">Environment Check</h4>
-            <div className="space-y-2">
-              <ValidationItem
-                label="Background"
-                status={validationState.background?.status || 'cluttered'}
-                message={validationState.background?.message || ''}
-                isGood={validationState.background?.status === 'clear' || validationState.background?.status === 'acceptable'}
-              />
-              <ValidationItem
-                label="Body Visibility"
-                status={validationState.body?.status || 'not_visible'}
-                message={validationState.body?.message || ''}
-                isGood={validationState.body?.status === 'visible'}
-                detail={
-                  validationState.body?.landmarks_detected
-                    ? Object.entries(validationState.body.landmarks_detected).map(([k, v]) => ({
-                        label: k.replace('_', ' '),
-                        ok: v as boolean,
-                      }))
-                    : undefined
-                }
-              />
-              <ValidationItem
-                label="Distance"
-                status={validationState.distance?.status || 'out_of_range'}
-                message={validationState.distance?.message || ''}
-                isGood={validationState.distance?.status === 'optimal' || validationState.distance?.status === 'acceptable'}
-              />
-            </div>
-          </motion.div>
+        {/* ── Stop Recording button — directly below camera for easy access ── */}
+        {state === 'recording' && (
+          <div className="flex justify-center">
+            <Button variant="danger" size="lg" onClick={stopRecording} leftIcon={<FiStopCircle />} className="min-w-[220px]">
+              Stop Recording
+            </Button>
+          </div>
         )}
 
-        {/* ── Controls ── */}
+        {/* ── Idle / upload / cancel controls ── */}
         <div className="space-y-4">
           {state === 'idle' && (
             <div className="flex justify-center gap-4">
@@ -625,12 +605,6 @@ export default function SignToTextPage() {
               <Button variant="secondary" onClick={stopValidation}>Cancel</Button>
             )}
 
-            {state === 'recording' && (
-              <Button variant="danger" onClick={stopRecording} leftIcon={<FiStopCircle />}>
-                Stop Recording
-              </Button>
-            )}
-
             {state === 'done' && (
               <Button variant="accent" onClick={recordAgain} leftIcon={<FiCamera />}>
                 {inputMode === 'record' ? 'Record Again' : 'Upload Another'}
@@ -638,6 +612,42 @@ export default function SignToTextPage() {
             )}
           </div>
         </div>
+
+        {/* ── Validation feedback ── */}
+        {(state === 'validating' || state === 'countdown' || state === 'recording') && validationState && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-lg p-4 shadow-md">
+            <h4 className="font-semibold text-gray-900 mb-3">Environment Check</h4>
+            <div className="space-y-2">
+              <ValidationItem
+                label="Background"
+                status={validationState.background?.status || 'cluttered'}
+                message={validationState.background?.message || ''}
+                isGood={validationState.background?.status === 'clear' || validationState.background?.status === 'acceptable'}
+              />
+              <ValidationItem
+                label="Body Visibility"
+                status={validationState.body?.status || 'not_visible'}
+                message={validationState.body?.message || ''}
+                isGood={validationState.body?.status === 'visible'}
+                detail={
+                  validationState.body?.landmarks_detected
+                    ? Object.entries(validationState.body.landmarks_detected).map(([k, v]) => ({
+                        label: k.replace('_', ' '),
+                        ok: v as boolean,
+                      }))
+                    : undefined
+                }
+              />
+              <ValidationItem
+                label="Distance"
+                status={validationState.distance?.status || 'out_of_range'}
+                message={validationState.distance?.message || ''}
+                isGood={validationState.distance?.status === 'optimal' || validationState.distance?.status === 'acceptable'}
+              />
+            </div>
+          </motion.div>
+        )}
 
         {/* ── Results ── */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}

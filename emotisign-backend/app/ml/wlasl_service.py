@@ -220,7 +220,11 @@ class WLASLModelService:
         
         return variants
     
-    async def extract_keypoints_from_video(self, video_path: str) -> np.ndarray:
+    async def extract_keypoints_from_video(
+        self,
+        video_path: str,
+        trim_frames: int = 0,
+    ) -> np.ndarray:
         """
         Extract keypoints from video file without loading all frames into RAM.
 
@@ -229,6 +233,10 @@ class WLASLModelService:
 
         Args:
             video_path: Path to video file
+            trim_frames: Number of frames to remove from each end of the extracted
+                         sequence (default 0 = no trimming). Only applied when
+                         trim_frames > 0 AND the sequence has more than
+                         2 * trim_frames frames (guard against very short videos).
         Returns:
             Keypoint sequence of shape (num_frames, 126)
         Raises:
@@ -282,6 +290,16 @@ class WLASLModelService:
 
         loop = asyncio.get_event_loop()
         keypoints = await loop.run_in_executor(_executor, _extract_sync)
+
+        # Trim starting transition frames only (user getting into position).
+        # Guard: only trim when there are enough frames remaining after the start trim.
+        if trim_frames > 0 and keypoints.shape[0] > trim_frames:
+            keypoints = keypoints[trim_frames:]
+            logger.info(
+                f"Trimmed {trim_frames} frames from start; "
+                f"remaining frames: {keypoints.shape[0]}"
+            )
+
         return keypoints
     
     async def predict(
@@ -380,7 +398,8 @@ class WLASLModelService:
     async def sign_to_text(
         self,
         video_path: str,
-        use_tta: Optional[bool] = None
+        use_tta: Optional[bool] = None,
+        trim_frames: int = 0,
     ) -> Dict:
         """
         Main entry point for sign-to-text translation.
@@ -388,12 +407,18 @@ class WLASLModelService:
         Args:
             video_path: Path to video file
             use_tta: Override default TTA setting (optional)
+            trim_frames: Number of frames to trim from each end of the extracted
+                         keypoint sequence (default 0 = no trimming). Pass
+                         self.trim_frames for webcam recordings; leave at 0 for
+                         user-uploaded files.
         Returns:
             Dictionary with translation results
         """
         try:
-            # Extract keypoints
-            keypoints = await self.extract_keypoints_from_video(video_path)
+            # Extract keypoints (with optional trim for webcam recordings)
+            keypoints = await self.extract_keypoints_from_video(
+                video_path, trim_frames=trim_frames
+            )
             
             # Run inference
             result = await self.predict(keypoints, use_tta=use_tta)
@@ -458,6 +483,7 @@ async def get_wlasl_service() -> WLASLModelService:
         device = os.getenv("ML_DEVICE", "cpu")
         use_tta = os.getenv("USE_TTA", "true").lower() == "true"
         confidence_threshold = float(os.getenv("CONFIDENCE_THRESHOLD", "0.25"))
+        trim_frames = int(os.getenv("WLASL_TRIM_FRAMES", "8"))
         
         _wlasl_service = WLASLModelService(
             model_path=model_path,
@@ -467,6 +493,7 @@ async def get_wlasl_service() -> WLASLModelService:
             use_tta=use_tta,
             confidence_threshold=confidence_threshold,
         )
+        _wlasl_service.trim_frames = trim_frames
         
         await _wlasl_service.load_model()
     

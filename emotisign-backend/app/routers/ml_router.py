@@ -41,6 +41,7 @@ def get_validator_dep() -> EnvironmentValidator:
 async def sign_to_text_endpoint(
     video: UploadFile = File(..., description="Video file containing ASL signs"),
     use_tta: bool = Form(True, description="Enable Test-Time Augmentation"),
+    is_webcam_recording: bool = Form(False, description="True when video was recorded via the webcam flow"),
     ml_service: WLASLModelService = Depends(get_ml_service_dep)
 ):
     """
@@ -103,7 +104,8 @@ async def sign_to_text_endpoint(
         
         # Process video
         try:
-            result = await ml_service.sign_to_text(temp_path, use_tta=use_tta)
+            trim_frames = getattr(ml_service, "trim_frames", 0) if is_webcam_recording else 0
+            result = await ml_service.sign_to_text(temp_path, use_tta=use_tta, trim_frames=trim_frames)
             try:
                 from app.ml.ml_service import detect_emotion_from_video
                 emotion = await detect_emotion_from_video(temp_path)

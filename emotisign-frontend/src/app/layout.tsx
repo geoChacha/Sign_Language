@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import { Toaster } from "react-hot-toast";
+import { Noto_Nastaliq_Urdu } from "next/font/google";
 import "./globals.css";
+
+const urduFont = Noto_Nastaliq_Urdu({
+  weight: ['400', '700'],
+  subsets: ['arabic'],
+  variable: '--font-urdu',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: "EmotiSign - Sign Language Translation",
@@ -13,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={urduFont.variable}>
       <body className="antialiased">
         <Toaster
           position="top-right"

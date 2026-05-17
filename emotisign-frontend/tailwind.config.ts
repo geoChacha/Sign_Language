@@ -31,6 +31,9 @@ const config: Config = {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "hero-gradient": "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #6B8DD6 100%)",
       },
+      fontFamily: {
+        urdu: ['var(--font-urdu)', 'serif'],
+      },
     },
   },
   plugins: [],

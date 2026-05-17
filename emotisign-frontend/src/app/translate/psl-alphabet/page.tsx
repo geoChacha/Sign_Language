@@ -45,6 +45,9 @@ export default function PSLAlphabetPage() {
   const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const fpsFrameCountRef = useRef(0);
   const fpsLastTimeRef = useRef(Date.now());
+  // Stability buffer — only commit a prediction after it appears N times in a row
+  const stabilityBufferRef = useRef<{ label: string; count: number }>({ label: '', count: 0 });
+  const STABILITY_THRESHOLD = 5; // frames the same letter must appear consecutively
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [isRecognizing, setIsRecognizing] = useState(false);
@@ -63,16 +66,32 @@ export default function PSLAlphabetPage() {
       setError(null);
     },
     onResult: (result) => {
-      setPrediction(result);
-      setLandmarks(result.landmarks);
-      setNoHandDetected(false);
-      setConfidenceLevel(getConfidenceLevel(result.confidence));
+      const buf = stabilityBufferRef.current;
+      if (result.predicted_label === buf.label) {
+        buf.count += 1;
+      } else {
+        buf.label = result.predicted_label;
+        buf.count = 1;
+      }
+      // Only update displayed prediction once stable
+      if (buf.count >= STABILITY_THRESHOLD) {
+        setPrediction(result);
+        setLandmarks(result.landmarks);
+        setNoHandDetected(false);
+        setConfidenceLevel(getConfidenceLevel(result.confidence));
+      } else {
+        // Still update landmarks for skeleton even while building stability
+        setLandmarks(result.landmarks);
+        setNoHandDetected(false);
+      }
     },
     onNoHand: () => {
+      stabilityBufferRef.current = { label: '', count: 0 };
       setNoHandDetected(true);
       setLandmarks(null);
     },
     onLowConfidence: (data) => {
+      stabilityBufferRef.current = { label: '', count: 0 };
       setNoHandDetected(false);
       setLandmarks(null);
       setPrediction({
@@ -192,6 +211,7 @@ export default function PSLAlphabetPage() {
     setPrediction(null);
     setLandmarks(null);
     setNoHandDetected(false);
+    stabilityBufferRef.current = { label: '', count: 0 };
 
     const ok = await startWebcam();
     if (!ok) return;
@@ -318,13 +338,12 @@ export default function PSLAlphabetPage() {
           <div className="min-h-[120px] flex flex-col items-center justify-center gap-4">
             {prediction ? (
               <>
-                {/* Large Urdu label + facial emotion */}
-                <motion.div className="flex flex-col items-center gap-3">
+                {/* Large Urdu label + facial emotion side by side */}
+                <motion.div className="flex items-center justify-center gap-4">
                   <p
                     dir="rtl"
-                    className="font-bold text-center leading-none"
+                    className="font-bold text-center leading-none font-urdu"
                     style={{
-                      fontFamily: 'serif',
                       letterSpacing: '0.05em',
                       fontSize: '4rem',
                       color: predColor,
