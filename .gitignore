@@ -31,16 +31,10 @@ env.bak/
 venv.bak/
 
 # PyTorch Models (trained weights)
-*.pt
 *.pth
 *.ckpt
 
-# Training Outputs
-alphabet_recognition/training_log.csv
-alphabet_recognition/dataset_statistics.txt
-alphabet_recognition/evaluation_report.txt
-alphabet_recognition/confusion_matrix.txt
-alphabet_recognition/confusion_matrix.png
+
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -76,7 +70,7 @@ Thumbs.db
 
 # Dataset (optional - uncomment if you don't want to track dataset)
 # PSL_dataset/
-# previous/
+previous/
 
 # Kiro (optional - uncomment if you don't want to track specs)
-# .kiro/
+.kiro/
