@@ -87,13 +87,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ── CORS — allow everything including file:// origins ──
+# ── CORS ─────────────────────────────────────────────────────────────────────
+# allow_credentials=True requires an explicit origin list — browsers reject "*"
+# when credentials (cookies / Authorization headers) are included in the request.
+_allowed_origins = settings.get_cors_origins()
+print(f"🌐 CORS allowed origins: {_allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin",
+                   "X-Requested-With", "Cache-Control"],
+    expose_headers=["Content-Length", "Content-Range"],
 )
 
 # ── Static files ──

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import List
 
 
 class Settings(BaseSettings):
@@ -7,14 +8,14 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "your-super-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    
+
     # Database
     DATABASE_URL: str = "sqlite+aiosqlite:///./emotisign.db"
-    
+
     # Upload
     UPLOAD_DIR: str = "uploads/videos"
     MAX_VIDEO_SIZE_MB: int = 50
-    
+
     # ML Model Configuration
     MODEL_PATH: str = "app/ml/models/wlasl100/best_model.pth"
     VOCAB_PATH: str = "app/ml/models/wlasl100/vocab.json"
@@ -23,6 +24,26 @@ class Settings(BaseSettings):
     USE_TTA: bool = True
     CONFIDENCE_THRESHOLD: float = 0.25
     MAX_VIDEO_DURATION_SEC: int = 30
+
+    # CORS — comma-separated list of allowed frontend origins.
+    # allow_credentials=True requires an explicit list; browsers reject "*" with credentials.
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    def get_cors_origins(self) -> List[str]:
+        """Return de-duplicated, stripped list of allowed origins."""
+        origins = {o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()}
+        # Always include the explicit FRONTEND_URL
+        if self.FRONTEND_URL:
+            origins.add(self.FRONTEND_URL.rstrip("/"))
+        # Always include local dev origins so development never breaks
+        origins.update([
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ])
+        return sorted(origins)
 
     class Config:
         env_file = ".env"

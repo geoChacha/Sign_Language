@@ -55,6 +55,12 @@ services:
       TEMPERATURE_PATH: app/ml/models/wlasl100/temperature.json
       # Sign generation (text-to-sign)
       KEYPOINTS_DIR: /app/keypoints_best
+      # CORS — allow the frontend container to call the backend without preflight errors.
+      # In Docker Compose, the browser connects to localhost:3000 (frontend) and
+      # localhost:8000 (backend) from the host machine, so both localhost origins
+      # must be listed. Adjust if you expose the frontend on a different domain.
+      CORS_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+      FRONTEND_URL: "http://localhost:3000"
     volumes:
       - backend_db:/app/data
       - backend_uploads:/app/uploads

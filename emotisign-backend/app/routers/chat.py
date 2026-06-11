@@ -204,22 +204,10 @@ async def get_messages(
         if msg.sender_id:
             u = await db.get(User, msg.sender_id)
             sender_name = u.username if u else None
-        items.append(ChatMessageResponse(
-            **_msg_to_dict(msg, sender_name),
-            id=msg.id,
-            room_id=msg.room_id,
-            sender_id=msg.sender_id,
-            sender_username=sender_name,
-            message_type=msg.message_type,
-            text_content=msg.text_content,
-            translated_text=msg.translated_text,
-            sign_data=msg.sign_data,
-            video_path=msg.video_path,
-            emotion=msg.emotion,
-            sentiment_label=msg.sentiment_label,
-            is_read=msg.is_read,
-            created_at=msg.created_at
-        ))
+        
+        # _msg_to_dict already includes all fields needed for ChatMessageResponse
+        msg_dict = _msg_to_dict(msg, sender_name)
+        items.append(ChatMessageResponse(**msg_dict))
 
     return PaginatedMessages(items=items, total=total, page=page, page_size=page_size)
 

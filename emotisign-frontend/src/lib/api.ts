@@ -67,6 +67,9 @@ class ApiClient {
 
     Cookies.set('access_token', response.data.access_token, {
       expires: response.data.expires_in / 86400,
+      sameSite: 'lax',
+      path: '/',
+      // secure: true,  // uncomment when serving over HTTPS
     });
 
     return response.data;

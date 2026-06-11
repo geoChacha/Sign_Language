@@ -43,6 +43,10 @@ services:
       VOCAB_PATH: app/ml/models/wlasl100/vocab.json
       TEMPERATURE_PATH: app/ml/models/wlasl100/temperature.json
       KEYPOINTS_DIR: /app/keypoints_best
+      # CORS — set to your production frontend domain, e.g.:
+      #   CORS_ORIGINS: "https://emotisign.example.com"
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     volumes:
       - backend_db:/app/data
       - backend_uploads:/app/uploads
