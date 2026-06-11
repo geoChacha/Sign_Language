@@ -41,6 +41,7 @@ from app.schemas import (
 )
 from app.services.auth_service import decode_token
 from app.services.ws_manager import manager
+from app.services.video_validator import validate_sign_video_bytes, VideoValidationError
 from app.config import settings
 from app.ml.ml_service import analyze_sentiment, text_to_sign, sign_to_text
 
@@ -252,6 +253,16 @@ async def upload_chat_sign_video(
         raise HTTPException(
             status_code=413,
             detail=f"Video too large (max {settings.MAX_VIDEO_SIZE_MB}MB).",
+        )
+    
+    # Validate that this is a sign language video
+    try:
+        validation_result = validate_sign_video_bytes(content, video.filename or "video.webm")
+        print(f"✅ Chat video validation passed: {validation_result}")
+    except VideoValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid sign language video: {str(e)}"
         )
 
     CHAT_VIDEO_DIR.mkdir(parents=True, exist_ok=True)

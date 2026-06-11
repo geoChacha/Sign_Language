@@ -19,6 +19,7 @@ import numpy as np
 
 from ..ml.wlasl_service import get_wlasl_service, WLASLModelService
 from ..services.environment_validator import get_validator, EnvironmentValidator
+from ..services.video_validator import validate_sign_video_bytes, VideoValidationError
 
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,17 @@ async def sign_to_text_endpoint(
                 raise HTTPException(
                     status_code=400,
                     detail=f"File too large. Maximum size: {max_size_mb}MB"
+                )
+            
+            # Validate that this is a sign language video
+            try:
+                validation_result = validate_sign_video_bytes(content, video.filename or "video.mp4")
+                logger.info(f"Video validation passed: {validation_result}")
+            except VideoValidationError as e:
+                logger.warning(f"Video validation failed: {e}")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid sign language video: {str(e)}"
                 )
             
             temp_file.write(content)

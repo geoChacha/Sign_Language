@@ -29,6 +29,7 @@ from app.schemas import (
     SuccessResponse
 )
 from app.ml.ml_service import text_to_sign, sign_to_text, analyze_sentiment, detect_emotion_from_video
+from app.services.video_validator import validate_sign_video_bytes, VideoValidationError
 
 router = APIRouter(prefix="/api/translate", tags=["Translation"])
 
@@ -146,6 +147,16 @@ async def translate_sign_to_text(
         raise HTTPException(
             status_code=413,
             detail=f"Video too large. Max size: {settings.MAX_VIDEO_SIZE_MB}MB"
+        )
+    
+    # Validate that this is actually a sign language video
+    try:
+        validation_result = validate_sign_video_bytes(content, video.filename or "video.mp4")
+        print(f"✅ Video validation passed: {validation_result}")
+    except VideoValidationError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid sign language video: {str(e)}"
         )
 
     # Save video
