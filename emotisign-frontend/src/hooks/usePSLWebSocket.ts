@@ -78,6 +78,8 @@ export function usePSLWebSocket(options: UsePSLWebSocketOptions) {
     const wsBase = apiUrl.replace(/^http/, 'ws');
     const wsUrl = `${wsBase}/ws/translate/psl-live`;
 
+    console.log('🔌 Attempting to connect PSL WebSocket to:', wsUrl);
+
     intentionalStopRef.current = false;
     setConnectionStatus('connecting');
 
@@ -85,10 +87,12 @@ export function usePSLWebSocket(options: UsePSLWebSocketOptions) {
     wsRef.current = ws;
 
     ws.onopen = () => {
+      console.log('✅ PSL WebSocket connection opened');
       reconnectCountRef.current = 0;
       setReconnectCount(0);
       setConnectionStatus('connected');
       startPing(ws);
+      optionsRef.current.onConnected?.();
     };
 
     ws.onmessage = (event) => {
@@ -110,6 +114,7 @@ export function usePSLWebSocket(options: UsePSLWebSocketOptions) {
             optionsRef.current.onLowConfidence?.(data);
             break;
           case 'error':
+            console.error('❌ PSL WS received error event:', message);
             optionsRef.current.onError?.(message || 'Unknown error');
             break;
           case 'session_end':
@@ -119,6 +124,7 @@ export function usePSLWebSocket(options: UsePSLWebSocketOptions) {
             // keepalive — no action needed
             break;
           default:
+            console.log('Unknown PSL WS event:', evtName, data);
             break;
         }
       } catch (e) {
@@ -126,12 +132,14 @@ export function usePSLWebSocket(options: UsePSLWebSocketOptions) {
       }
     };
 
-    ws.onerror = () => {
+    ws.onerror = (error) => {
+      console.error('❌ PSL WebSocket error:', error);
       setConnectionStatus('error');
       optionsRef.current.onError?.('WebSocket connection error');
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      console.log('🔌 PSL WebSocket closed. Code:', event.code, 'Reason:', event.reason, 'Clean:', event.wasClean);
       stopPing();
       setConnectionStatus('disconnected');
 
@@ -139,6 +147,7 @@ export function usePSLWebSocket(options: UsePSLWebSocketOptions) {
       if (!intentionalStopRef.current && reconnectCountRef.current < 3) {
         reconnectCountRef.current += 1;
         setReconnectCount(reconnectCountRef.current);
+        console.log('🔄 Attempting reconnect', reconnectCountRef.current, 'of 3...');
         setTimeout(() => {
           if (!intentionalStopRef.current) {
             connect();
@@ -170,7 +179,9 @@ export function usePSLWebSocket(options: UsePSLWebSocketOptions) {
       }));
     }
   }, []);
-
+   const isConnected = useCallback(() => {
+  return wsRef.current?.readyState === WebSocket.OPEN;
+}, []);
   const updateConfig = useCallback((confidenceThreshold: number) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -198,6 +209,7 @@ export function usePSLWebSocket(options: UsePSLWebSocketOptions) {
     connect,
     disconnect,
     sendFrame,
+    isConnected,
     updateConfig,
   };
 }

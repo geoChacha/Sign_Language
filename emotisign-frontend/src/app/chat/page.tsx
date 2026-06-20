@@ -5,6 +5,7 @@ import Webcam from 'react-webcam';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import fixWebmDuration from 'fix-webm-duration';
 import {
   FiArrowLeft, FiSend, FiUser, FiPlus, FiSearch, FiX,
   FiMic, FiMicOff, FiCamera, FiStopCircle, FiVolume2, FiEye,
@@ -13,7 +14,9 @@ import {
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
 import EmotionBadge from '@/components/ui/EmotionBadge';
+import SkeletonCanvas from '@/components/ui/SkeletonCanvas';
 import { createChatWS, createSignToTextWS, EmotiSignWebSocket } from '@/lib/websocket';
+import { usePSLWebSocket, PSLPredictionResult } from '@/hooks/usePSLWebSocket';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { ChatRoom, ChatMessage, User, Emotion, SignLanguage } from '@/types';
@@ -31,6 +34,8 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const webcamRef = useRef<Webcam>(null);
   const pslVideoRef = useRef<HTMLVideoElement>(null);
+  const pslWebcamRef = useRef<Webcam>(null);
+  const pslFrameIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Rooms & messages
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
@@ -65,6 +70,8 @@ export default function ChatPage() {
   const [pslLabel, setPslLabel] = useState('');
   const [pslRecordedBlob, setPslRecordedBlob] = useState<Blob | null>(null);
   const [isPslRecording, setIsPslRecording] = useState(false);
+  const [pslRecognizedText, setPslRecognizedText] = useState(''); // Accumulated PSL letters
+  const [pslLastLetter, setPslLastLetter] = useState(''); // Most recent detected letter
   const [aslRecordedBlob, setAslRecordedBlob] = useState<Blob | null>(null);
   const [aslSelectedFile, setAslSelectedFile] = useState<File | null>(null);
   const [aslFilePreviewUrl, setAslFilePreviewUrl] = useState<string | null>(null);
@@ -76,9 +83,49 @@ export default function ChatPage() {
   const pslChunksRef = useRef<Blob[]>([]);
   const aslChunksRef = useRef<Blob[]>([]);
   const aslVideoFileInputRef = useRef<HTMLInputElement>(null);
+  const pslRecordingStartTimeRef = useRef<number>(0); // Track actual recording start time
+  const aslRecordingStartTimeRef = useRef<number>(0); // Track ASL recording start time
 
   // Speech-to-text
   const [isListening, setIsListening] = useState(false);
+
+  // ── PSL WebSocket for live recognition ───────────────────────────────────
+  const pslWs = usePSLWebSocket({
+    onConnected: useCallback(() => {
+      console.log('✅ PSL WebSocket connected');
+    }, []),
+    onResult: useCallback((result: PSLPredictionResult) => {
+      console.log('🎯 PSL letter detected:', result.predicted_label, 'confidence:', result.confidence);
+      // Accumulate recognized letters (filter out duplicates)
+      setPslLastLetter(result.predicted_label);
+      setPslRecognizedText(prev => {
+        // Simple deduplication: don't add if it's the same as last character
+        const lastChar = prev.slice(-1);
+        if (lastChar === result.predicted_label) {
+          console.log('⏭️  Skipping duplicate:', result.predicted_label);
+          return prev;
+        }
+        const newText = prev + result.predicted_label;
+        console.log('✅ Updated text:', newText);
+        return newText;
+      });
+    }, []),
+    onNoHand: useCallback(() => {
+      console.log('👋 No hand detected');
+    }, []),
+    onLowConfidence: useCallback((data: {
+      predicted_label: string;
+      confidence: number;
+      emotion?: string;
+      emotion_emoji?: string;
+    }) => {
+      console.log('❓ Low confidence:', data.predicted_label, data.confidence);
+      setPslLastLetter(data.predicted_label + '?');
+    }, []),
+    onError: useCallback((message: string) => {
+      console.error('❌ PSL WS Error:', message);
+    }, []),
+  });
 
   // Sign viewer modal
   const [showSignModal, setShowSignModal] = useState(false);
@@ -388,14 +435,26 @@ export default function ChatPage() {
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) aslChunksRef.current.push(e.data);
       };
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(aslChunksRef.current, { type: recorder.mimeType || 'video/webm' });
-        setAslRecordedBlob(blob);
+        
+        // Fix WebM duration for ASL videos too
+        try {
+          const actualDuration = Date.now() - aslRecordingStartTimeRef.current;
+          const fixedBlob = await fixWebmDuration(blob, actualDuration);
+          console.log('✅ ASL video fixed - size:', fixedBlob.size, 'bytes');
+          setAslRecordedBlob(fixedBlob);
+        } catch (err) {
+          console.error('❌ Failed to fix ASL WebM duration:', err);
+          setAslRecordedBlob(blob);
+        }
+        
         stream.getTracks().forEach((t) => t.stop());
         pslStreamRef.current = null;
         if (pslVideoRef.current) pslVideoRef.current.srcObject = null;
       };
       recorder.start(200);
+      aslRecordingStartTimeRef.current = Date.now();
       setIsAslVideoRecording(true);
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1);
@@ -435,7 +494,7 @@ export default function ChatPage() {
     }
     setIsUploadingSign(true);
     try {
-      const { video_url } = await api.uploadChatSignVideo(selectedRoom.id, file);
+      const { video_url } = await api.uploadChatSignVideo(selectedRoom.id, file, 'ASL');
       chatWsRef.current.send({
         type: 'sign_video',
         video_url,
@@ -526,75 +585,312 @@ export default function ChatPage() {
   };
 
   const stopPslRecording = useCallback(() => {
+    console.log('⏹️ Stopping PSL recording...');
+    
+    // Stop MediaRecorder
     if (pslMediaRecorderRef.current?.state === 'recording') {
+      console.log('⏹️ MediaRecorder state:', pslMediaRecorderRef.current.state);
       pslMediaRecorderRef.current.stop();
+      // Note: blob will be created asynchronously in recorder.onstop callback
+    } else {
+      console.warn('⚠️ MediaRecorder not in recording state:', pslMediaRecorderRef.current?.state);
     }
+    
+    // Stop frame streaming
+    if (pslFrameIntervalRef.current) {
+      clearInterval(pslFrameIntervalRef.current);
+      pslFrameIntervalRef.current = null;
+      console.log('✅ Stopped frame streaming');
+    }
+    
+    // Stop timer
     clearInterval(recordingTimerRef.current ?? undefined);
     recordingTimerRef.current = null;
+    
+    // Disconnect PSL WebSocket
+    pslWs.disconnect();
+    console.log('🔌 Disconnected PSL WebSocket');
+    
     setIsPslRecording(false);
-  }, []);
+  }, [pslWs]);
 
   const startPslRecording = async () => {
     if (isPslRecording) return;
+    
+    // Reset state
     setPslRecordedBlob(null);
+    setPslRecognizedText('');
+    setPslLastLetter('');
     setRecordingTime(0);
+    
     try {
+      console.log('🚀 Starting PSL recording...');
+      console.log('📡 PSL WebSocket current status:', pslWs.connectionStatus);
+      console.log('📡 PSL WebSocket object:', pslWs);
+      console.log('📡 Calling pslWs.connect()...');
+      
+      // Connect PSL WebSocket
+      pslWs.connect();
+      console.log('📡 pslWs.connect() called');
+      
+      // Wait for connection to establish (increased timeout)
+      console.log('⏳ Waiting for WebSocket connection...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('📡 PSL WebSocket status after connect:', pslWs.connectionStatus);
+      
+      if (pslWs.connectionStatus !== 'connected') {
+        console.warn('⚠️ WebSocket not connected yet, but continuing. Status:', pslWs.connectionStatus);
+        console.warn('⚠️ Frames will be sent once connection is established');
+      } else {
+        // Send a test ping to verify connection is really working
+        console.log('📡 Sending test ping to verify connection...');
+        try {
+          pslWs.updateConfig(0.7); // This sends a message
+          console.log('✅ Test message sent successfully');
+        } catch (err) {
+          console.error('❌ Failed to send test message:', err);
+        }
+      }
+      
+      // Give a bit more time after test message
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Start MediaRecorder for video capture
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
         audio: false,
       });
+      
+      console.log('📹 Got media stream');
+      
       pslStreamRef.current = stream;
       if (pslVideoRef.current) {
         pslVideoRef.current.srcObject = stream;
+        console.log('📹 Set video srcObject');
+        // Wait for video to be ready
+        await new Promise((resolve) => {
+          if (pslVideoRef.current) {
+            pslVideoRef.current.onloadedmetadata = async () => {
+              console.log('📹 Video metadata loaded');
+              // Important: Start video playback
+              try {
+                await pslVideoRef.current!.play();
+                console.log('▶️ Video playback started');
+              } catch (err) {
+                console.error('❌ Video play error:', err);
+              }
+              resolve(null);
+            };
+          } else {
+            resolve(null);
+          }
+        });
       }
+      
       pslChunksRef.current = [];
       const recorder = new MediaRecorder(stream, {
         mimeType: MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
           ? 'video/webm;codecs=vp9'
           : 'video/webm',
       });
+      
       pslMediaRecorderRef.current = recorder;
+      
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) pslChunksRef.current.push(e.data);
+        console.log('📦 Data chunk received:', e.data.size, 'bytes');
+        if (e.data.size > 0) {
+          pslChunksRef.current.push(e.data);
+        }
       };
-      recorder.onstop = () => {
+      
+      recorder.onstop = async () => {
+        console.log('⏹️ MediaRecorder stopped, creating blob from chunks:', pslChunksRef.current.length);
+        
+        // Important: Give MediaRecorder time to finalize the WebM container
+        // Without this, the WebM file may not have proper metadata
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         const blob = new Blob(pslChunksRef.current, { type: recorder.mimeType || 'video/webm' });
-        setPslRecordedBlob(blob);
+        console.log('📦 Initial blob created - size:', blob.size, 'bytes, type:', blob.type);
+        
+        if (blob.size === 0) {
+          console.error('❌ Empty blob created! No video data recorded.');
+          toast.error('Recording failed - no video data captured');
+          stream.getTracks().forEach((t) => t.stop());
+          pslStreamRef.current = null;
+          if (pslVideoRef.current) {
+            pslVideoRef.current.srcObject = null;
+          }
+          return;
+        }
+        
+        // Fix WebM duration metadata using actual recording duration
+        // This makes the file readable by OpenCV
+        try {
+          const actualDuration = Date.now() - pslRecordingStartTimeRef.current;
+          console.log('🔧 Fixing WebM duration:', actualDuration, 'ms');
+          const fixedBlob = await fixWebmDuration(blob, actualDuration);
+          console.log('✅ Fixed blob created - size:', fixedBlob.size, 'bytes');
+          
+          if (fixedBlob.size < 1000) {
+            console.warn('⚠️ Very small blob:', fixedBlob.size, 'bytes - may be incomplete');
+            toast('Recording may be too short or incomplete', { icon: '⚠️' });
+          } else {
+            toast.success(`Video recorded: ${(fixedBlob.size / 1024).toFixed(0)}KB - click Send to upload`);
+          }
+          
+          setPslRecordedBlob(fixedBlob);
+        } catch (err) {
+          console.error('❌ Failed to fix WebM duration:', err);
+          // Fall back to unfixed blob
+          toast('Video recorded but may have playback issues', { icon: '⚠️' });
+          setPslRecordedBlob(blob);
+        }
+        
         stream.getTracks().forEach((t) => t.stop());
         pslStreamRef.current = null;
         if (pslVideoRef.current) {
           pslVideoRef.current.srcObject = null;
         }
       };
-      recorder.start(200);
+      
+      // Request data more frequently for better reliability
+      // Using timeslice of 100ms ensures we get chunks even for short recordings
+      recorder.start(100);
+      
+      // Track recording start time for accurate duration calculation
+      pslRecordingStartTimeRef.current = Date.now();
+      
       setIsPslRecording(true);
+      
+      console.log('🎥 PSL Recording started, WebSocket status:', pslWs.connectionStatus);
+      console.log('🔄 Starting frame streaming interval after short delay...');
+      
+      // Wait a bit for WebSocket to be fully ready (like standalone page does)
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Start sending frames to PSL WebSocket
+      let frameCount = 0;
+      pslFrameIntervalRef.current = setInterval(() => {
+        frameCount++;
+        
+        const video = pslVideoRef.current;
+        if (!video || video.readyState < 2) {
+          if (frameCount % 20 === 0) {
+            console.log('⏳ Video not ready yet, readyState:', video?.readyState, '(frame', frameCount, ')');
+          }
+          return;
+        }
+        
+        // Capture frame using same method as standalone page
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        ctx.drawImage(video, 0, 0);
+        
+        // Use toBlob like standalone page
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1];
+            if (base64 && pslWs.isConnected()) {
+              pslWs.sendFrame(base64);
+              if (frameCount % 20 === 0) {
+                console.log('📤 Frame', frameCount, 'sent to PSL WebSocket');
+              }
+            } else if (frameCount % 20 === 0 && pslWs.isConnected()) {
+              console.log('❌ WebSocket not connected, status:', pslWs.connectionStatus, '(frame', frameCount, ')');
+            }
+          };
+          reader.readAsDataURL(blob);
+        }, 'image/jpeg', 0.8);
+      }, 150); // ~6-7 FPS (150ms)
+      
+      // Recording timer with auto-stop at 10 seconds
       recordingTimerRef.current = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
+        setRecordingTime((prev) => {
+          const newTime = prev + 1;
+          if (newTime >= 10) {
+            // Auto-stop at 10 seconds
+            stopPslRecording();
+          }
+          return newTime;
+        });
       }, 1000);
-    } catch {
-      toast.error('Could not access camera for recording');
+      
+    } catch (error) {
+      console.error('PSL recording error:', error);
+      toast.error('Could not access camera for PSL recording');
+      pslWs.disconnect();
     }
   };
 
   const sendPslSignVideo = async () => {
-    if (!pslRecordedBlob || !pslLabel.trim() || !selectedRoom || !chatWsRef.current?.isConnected()) {
-      toast.error('Record a video and enter a label (letter or meaning)');
+    if (!pslRecordedBlob || !selectedRoom || !chatWsRef.current?.isConnected()) {
+      toast.error('Record a PSL video first');
       return;
     }
+    
+    // Check if blob has actual data
+    if (pslRecordedBlob.size === 0) {
+      console.error('❌ Cannot send empty video blob');
+      toast.error('Video recording is empty - please try recording again');
+      return;
+    }
+    
+    console.log('📤 Sending PSL video - size:', pslRecordedBlob.size, 'bytes');
+    
+    // Give a moment for any final blob finalization
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Use accumulated recognized text as label (fallback to "PSL Sign" if empty)
+    const recognizedLabel = pslRecognizedText.trim() || 'PSL Sign';
+    
+    // Warn if no letters detected but allow sending
+    if (!pslRecognizedText.trim()) {
+      console.warn('⚠️ No PSL letters detected, sending with default label');
+    } else {
+      console.log('✅ Recognized text:', recognizedLabel);
+    }
+    
     setIsUploadingSign(true);
     try {
+      // Normalize MIME type: remove codec info if present
+      let mimeType = pslRecordedBlob.type || 'video/webm';
+      if (mimeType.includes(';')) {
+        mimeType = mimeType.split(';')[0]; // "video/webm;codecs=vp9" → "video/webm"
+      }
+      
       const file = new File([pslRecordedBlob], 'psl-sign.webm', {
-        type: pslRecordedBlob.type || 'video/webm',
+        type: mimeType,
       });
-      const { video_url } = await api.uploadChatSignVideo(selectedRoom.id, file);
+      
+      console.log('📦 Created file for upload:', {
+        size: file.size,
+        type: file.type,
+        name: file.name,
+        label: recognizedLabel,
+        blobSize: pslRecordedBlob.size
+      });
+      
+      if (file.size === 0) {
+        throw new Error('File size is 0 bytes - recording may have failed');
+      }
+      
+      const { video_url } = await api.uploadChatSignVideo(selectedRoom.id, file, 'PSL');
       chatWsRef.current.send({
         type: 'sign_video',
         video_url,
-        label: pslLabel.trim(),
+        label: recognizedLabel,
         sign_language: 'PSL',
         auto_translate: false,
       });
-      toast.success('PSL sign sent');
+      toast.success(`PSL sign sent: "${recognizedLabel}"`);
       cancelSignRecording();
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Failed to send PSL video');
@@ -617,6 +913,8 @@ export default function ChatPage() {
     setRecordingTime(0);
     setPslLabel('');
     setPslRecordedBlob(null);
+    setPslRecognizedText('');
+    setPslLastLetter('');
     setIsPslRecording(false);
     setAslSubMode('live');
     setAslRecordedBlob(null);
@@ -905,7 +1203,40 @@ export default function ChatPage() {
                                   )}
                                 </div>
                               ) : (
-                                <p className="text-sm leading-relaxed">{message.text_content}</p>
+                                <div>
+                                  <p className="text-sm leading-relaxed">{message.text_content}</p>
+                                  
+                                  {/* ── Inline Sign Animation (if sign_data present) ── */}
+                                  {message.sign_data && (() => {
+                                    try {
+                                      const signs = JSON.parse(message.sign_data);
+                                      // Only show first sign for inline preview (to save space)
+                                      const firstSignWithKeypoints = signs.find((s: any) => s.keypoints && s.keypoints.length > 0);
+                                      if (firstSignWithKeypoints) {
+                                        return (
+                                          <div className="mt-2 inline-block">
+                                            <div className="bg-[#1a1a2e] rounded-lg overflow-hidden w-28 h-28">
+                                              <SkeletonCanvas
+                                                frames={firstSignWithKeypoints.keypoints}
+                                                word={firstSignWithKeypoints.word}
+                                                frameRateMs={50}
+                                                width={112}
+                                                height={112}
+                                              />
+                                            </div>
+                                            <p className="text-xs text-gray-400 mt-1 text-center">
+                                              ASL: {firstSignWithKeypoints.word}
+                                              {signs.length > 1 && ` +${signs.length - 1} more`}
+                                            </p>
+                                          </div>
+                                        );
+                                      }
+                                    } catch (e) {
+                                      console.error('Failed to parse sign_data:', e);
+                                    }
+                                    return null;
+                                  })()}
+                                </div>
                               )}
                             </div>
 
@@ -1183,19 +1514,83 @@ export default function ChatPage() {
                   </>
                 ) : (
                   <>
-                    <motion.div>
-                      <label className="text-xs text-gray-500 block mb-1">Sign label (Urdu letter or meaning)</label>
-                      <input type="text" value={pslLabel} onChange={(e) => setPslLabel(e.target.value)} placeholder="e.g. ا or hello" className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary-200 outline-none" dir="auto" />
+                    {/* Live PSL Recognition Display */}
+                    <motion.div className="bg-gray-50 rounded-lg p-3 min-h-[80px]">
+                      <p className="text-xs text-gray-500 mb-1">Recognized letters (PSL - Live)</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-gray-900 text-lg font-medium" dir="auto">
+                          {pslRecognizedText || (isPslRecording ? 'Recording...' : 'Press Record to start')}
+                        </p>
+                        {isPslRecording && pslLastLetter && (
+                          <motion.span
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            className="text-primary-600 text-sm font-bold bg-primary-50 px-2 py-1 rounded"
+                          >
+                            {pslLastLetter}
+                          </motion.span>
+                        )}
+                      </div>
+                      {pslRecognizedText && !isPslRecording && (
+                        <p className="text-xs text-green-600 mt-1">
+                          Ready to send: {pslRecognizedText.length} letter(s)
+                        </p>
+                      )}
+                      {isPslRecording && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Recording... {recordingTime}/10 seconds
+                        </p>
+                      )}
                     </motion.div>
-                    {pslRecordedBlob && !isPslRecording && <p className="text-xs text-green-700">Video ready ({(pslRecordedBlob.size / 1024).toFixed(0)} KB)</p>}
+                    
+                    {pslRecordedBlob && !isPslRecording && (
+                      <p className="text-xs text-green-700">
+                        Video ready ({(pslRecordedBlob.size / 1024).toFixed(0)} KB)
+                      </p>
+                    )}
+                    
                     <motion.div className="flex flex-wrap gap-3">
                       {!isPslRecording ? (
-                        <Button onClick={startPslRecording} className="flex-1 min-w-[120px]" leftIcon={<FiCamera size={16} />} disabled={!!pslRecordedBlob}>{pslRecordedBlob ? 'Recorded' : 'Record'}</Button>
+                        <Button 
+                          onClick={startPslRecording} 
+                          className="flex-1 min-w-[120px]" 
+                          leftIcon={<FiCamera size={16} />} 
+                          disabled={!!pslRecordedBlob}
+                        >
+                          {pslRecordedBlob ? 'Recorded' : 'Record (10s)'}
+                        </Button>
                       ) : (
-                        <Button onClick={stopPslRecording} variant="danger" className="flex-1" leftIcon={<FiStopCircle size={16} />}>Stop</Button>
+                        <Button 
+                          onClick={stopPslRecording} 
+                          variant="danger" 
+                          className="flex-1" 
+                          leftIcon={<FiStopCircle size={16} />}
+                        >
+                          Stop
+                        </Button>
                       )}
-                      {pslRecordedBlob && !isPslRecording && <Button variant="secondary" onClick={() => { setPslRecordedBlob(null); setRecordingTime(0); }}>Re-record</Button>}
-                      <Button onClick={sendPslSignVideo} disabled={!pslRecordedBlob || !pslLabel.trim() || !chatWsRef.current?.isConnected() || isUploadingSign} isLoading={isUploadingSign} className="flex-1 min-w-[120px]" leftIcon={<FiSend size={16} />}>Send video</Button>
+                      {pslRecordedBlob && !isPslRecording && (
+                        <Button 
+                          variant="secondary" 
+                          onClick={() => { 
+                            setPslRecordedBlob(null); 
+                            setPslRecognizedText('');
+                            setPslLastLetter('');
+                            setRecordingTime(0); 
+                          }}
+                        >
+                          Re-record
+                        </Button>
+                      )}
+                      <Button 
+                        onClick={sendPslSignVideo} 
+                        disabled={!pslRecordedBlob || !chatWsRef.current?.isConnected() || isUploadingSign} 
+                        isLoading={isUploadingSign} 
+                        className="flex-1 min-w-[120px]" 
+                        leftIcon={<FiSend size={16} />}
+                      >
+                        Send video
+                      </Button>
                     </motion.div>
                   </>
                 )}

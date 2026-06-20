@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
+import fixWebmDuration from 'fix-webm-duration';
 import {
   FiCamera,
   FiVolume2,
@@ -33,6 +34,7 @@ export default function SignToTextPage() {
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const recordingStartTimeRef = useRef<number>(0); // Track recording start time for duration fix
 
   const [state, setState] = useState<PageState>('idle');
   const [inputMode, setInputMode] = useState<InputMode>('record');
@@ -241,6 +243,7 @@ export default function SignToTextPage() {
       };
       mediaRecorderRef.current = mediaRecorder;
       mediaRecorder.start();
+      recordingStartTimeRef.current = Date.now(); // Track start time
       setState('recording');
 
       const startTime = Date.now();
@@ -286,25 +289,29 @@ export default function SignToTextPage() {
     try {
       const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
       if (blob.size > 50 * 1024 * 1024) throw new Error('Video file is too large (max 50MB)');
-      const formData = new FormData();
-      formData.append('video', blob, 'recording.webm');
-      formData.append('use_tta', 'true');
-      formData.append('is_webcam_recording', 'true');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/ml/sign-to-text`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to process video');
-      }
-      const data: PredictionResult = await response.json();
+      
+      // Fix WebM duration metadata to make it readable by OpenCV
+      console.log('🔧 Fixing WebM duration for ASL video...');
+      const actualDuration = Date.now() - recordingStartTimeRef.current;
+      const fixedBlob = await fixWebmDuration(blob, actualDuration);
+      console.log('✅ Fixed blob created - size:', fixedBlob.size, 'bytes');
+      
+      // Create File object from fixed blob
+      const videoFile = new File([fixedBlob], 'recording.webm', { type: 'video/webm' });
+      
+      console.log('📤 Submitting webcam recording to ML backend...');
+      
+      // Use the ML endpoint so recorded WebM files get webcam-specific handling.
+      const data = await api.signToText(videoFile, 'ASL', { isWebcamRecording: true });
+      
+      console.log('✅ Translation complete:', data);
       setResult(data);
       setState('done');
       toast.success('Translation complete!');
     } catch (err: any) {
-      setError(err.message || 'Failed to process video');
-      toast.error(err.message || 'Failed to process video');
+      console.error('❌ Submit error:', err);
+      setError(err.response?.data?.detail || err.message || 'Failed to process video');
+      toast.error(err.response?.data?.detail || err.message || 'Failed to process video');
       setState('review');
     }
   }, []);
@@ -688,7 +695,7 @@ export default function SignToTextPage() {
                     <>
                       <p>Top 5 Predictions:</p>
                       <ul className="mt-2 space-y-1">
-                        {result.top5_predictions.map(([, conf], i) => (
+                        {(result.top5_predictions ?? result.glosses.map((_, i) => [i, i === 0 ? result.confidence : 0] as [number, number])).map(([, conf], i) => (
                           <li key={i} className="flex items-center gap-2">
                             <span className="w-6 text-gray-400">{i + 1}.</span>
                             <span className="flex-1">{result.glosses[i]}</span>

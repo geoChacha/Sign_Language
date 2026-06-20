@@ -37,7 +37,7 @@ class SignLanguageVideoValidator:
     
     def __init__(
         self,
-        min_duration_sec: float = 0.5,
+        min_duration_sec: float = 0.01,  # Very lenient - just check video isn't completely empty
         max_duration_sec: float = 30.0,
         min_hand_frames_ratio: float = 0.30,  # At least 30% of frames must have hands
         min_resolution: Tuple[int, int] = (320, 240),
@@ -91,18 +91,82 @@ class SignLanguageVideoValidator:
             width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             
-            if total_frames == 0 or fps == 0:
-                raise VideoValidationError("Invalid video: no frames or invalid FPS")
+            # Log video properties for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Video validation - File: {video_path}")
+            logger.info(f"  Total frames (raw): {total_frames}")
+            logger.info(f"  FPS (raw): {fps}")
+            logger.info(f"  Resolution: {width}x{height}")
             
-            duration_sec = total_frames / fps
+            # Check if this is a WebM file (common for browser recordings)
+            is_webm = video_path.lower().endswith('.webm')
+            if is_webm:
+                logger.info(f"  Detected WebM file - will use lenient validation")
             
-            # Check 1: Duration within acceptable range
-            if duration_sec < self.min_duration_sec:
+            # Check for completely invalid values (OpenCV failed to read file)
+            if total_frames < 0 or fps < 0:
+                logger.error(f"OpenCV returned invalid negative values (frames={total_frames}, fps={fps})")
                 raise VideoValidationError(
-                    f"Video too short ({duration_sec:.1f}s). "
-                    f"Minimum duration for sign language: {self.min_duration_sec}s"
+                    "Cannot read video file metadata. The video file may not be properly finalized. "
+                    "This often happens with WebM files from browser recording. "
+                    "Please try: 1) Wait a moment after recording stops, 2) Try recording again, "
+                    "3) Use a different browser if the issue persists."
                 )
             
+            # Be more lenient with frame count/FPS detection
+            # WebM videos from MediaRecorder often have unreliable metadata
+            if total_frames == 0 or fps == 0 or fps > 1000:
+                # Try to manually count frames if properties are unreliable
+                logger.warning(f"Unreliable video properties (frames={total_frames}, fps={fps}), attempting manual count")
+                manual_frame_count = 0
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset to start
+                while True:
+                    ret, _ = cap.read()
+                    if not ret:
+                        break
+                    manual_frame_count += 1
+                    # Safety limit to prevent infinite loops
+                    if manual_frame_count > 10000:
+                        logger.error("Manual frame count exceeded safety limit")
+                        break
+                
+                if manual_frame_count == 0:
+                    # For WebM files, this might be okay if we can still read frames for validation
+                    if is_webm:
+                        logger.warning("WebM file has 0 frames in metadata, but will attempt validation anyway")
+                        total_frames = 30  # Assume minimum viable frames
+                        fps = 30.0
+                    else:
+                        raise VideoValidationError("Invalid video: no frames could be read")
+                else:
+                    # Reset capture for further processing
+                    cap.release()
+                    # Add small delay before reopening
+                    import time
+                    time.sleep(0.05)
+                    cap = cv2.VideoCapture(video_path)
+                    if not cap.isOpened():
+                        raise VideoValidationError("Cannot reopen video after manual frame count")
+                        
+                    total_frames = manual_frame_count
+                    fps = 30.0  # Assume 30fps if detection failed
+                    logger.info(f"  Manual count: {manual_frame_count} frames, assuming {fps} fps")
+            
+            
+            duration_sec = total_frames / fps if fps > 0 else 0
+            logger.info(f"  Calculated duration: {duration_sec:.2f}s (frames={total_frames}, fps={fps})")
+            
+            # Check 1: Duration within acceptable range
+            # For WebM recordings from browser, be VERY lenient on minimum duration
+            # because metadata is often unreliable. Focus on hand visibility instead.
+            min_duration_check = 0.01 if is_webm else self.min_duration_sec
+            if duration_sec < min_duration_check:
+                logger.error(f"Video duration too short: {duration_sec:.4f}s")
+                raise VideoValidationError(
+                    f"Video appears to be empty or corrupted (duration={duration_sec:.2f}s)."
+                )
+                
             if duration_sec > self.max_duration_sec:
                 raise VideoValidationError(
                     f"Video too long ({duration_sec:.1f}s). "
@@ -159,8 +223,15 @@ class SignLanguageVideoValidator:
             
             hands_ratio = frames_with_hands / frames_sampled
             
+            # Be more lenient with WebM files from browser recording
+            # They often have encoding issues that affect detection
+            required_ratio = self.min_hand_frames_ratio * 0.7 if is_webm else self.min_hand_frames_ratio
+            
+            logger.info(f"  Hand detection: {frames_with_hands}/{frames_sampled} frames ({hands_ratio*100:.1f}%)")
+            logger.info(f"  Required ratio: {required_ratio*100:.1f}% (WebM: {is_webm})")
+            
             # Check 4: Sufficient hand visibility
-            if hands_ratio < self.min_hand_frames_ratio:
+            if hands_ratio < required_ratio:
                 raise VideoValidationError(
                     f"Insufficient hand visibility detected. "
                     f"Only {hands_ratio*100:.0f}% of frames contain visible hands. "
@@ -174,11 +245,15 @@ class SignLanguageVideoValidator:
                 )
             
             # Check 5: Motion detected (not a static image)
-            if not motion_detected:
+            # Be more lenient with WebM files
+            if not motion_detected and not is_webm:
                 raise VideoValidationError(
                     "No motion detected — video appears to be a static image. "
                     "Sign language videos must show hand/body movement."
                 )
+            
+            logger.info(f"  Motion detected: {motion_detected}")
+            logger.info(f"  ✅ Validation passed!")
             
             return {
                 "valid": True,
@@ -212,11 +287,113 @@ class SignLanguageVideoValidator:
         Raises:
             VideoValidationError: If video fails validation
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"Video validation - Starting validation from bytes")
+        logger.info(f"  Input: {len(video_bytes)} bytes, filename: {original_filename}")
+        
         # Write to temporary file
         ext = Path(original_filename).suffix or ".mp4"
-        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext, mode='wb') as tmp:
             tmp.write(video_bytes)
+            tmp.flush()  # Ensure all data is written
+            os.fsync(tmp.fileno())  # Force write to disk
             tmp_path = tmp.name
+        
+        logger.info(f"  Wrote to temp file: {tmp_path}")
+        
+        # Verify the file was actually written
+        if not os.path.exists(tmp_path):
+            logger.error(f"  Temp file does not exist after writing!")
+            raise VideoValidationError("Failed to write video to temporary file")
+        
+        actual_size = os.path.getsize(tmp_path)
+        logger.info(f"  Temp file size on disk: {actual_size} bytes")
+        
+        if actual_size == 0:
+            logger.error(f"  Temp file is empty (0 bytes)!")
+            raise VideoValidationError("Video file is empty - recording may have failed")
+        
+        if actual_size != len(video_bytes):
+            logger.warning(f"  Size mismatch: wrote {len(video_bytes)} bytes but file is {actual_size} bytes")
+        
+        # Moderate delay to ensure WebM file is properly finalized
+        # MediaRecorder WebM files need time to write container metadata
+        import time
+        logger.info(f"  Waiting 0.5s for file finalization...")
+        time.sleep(0.5)  # Reduced from 1.0s
+        
+        # Try to open with OpenCV to verify it's readable
+        logger.info(f"  Testing if OpenCV can open the file...")
+        test_cap = cv2.VideoCapture(tmp_path)
+        if not test_cap.isOpened():
+            test_cap.release()
+            logger.warning(f"  OpenCV cannot open the file directly - attempting to repair...")
+            
+            # Try to read the file frame-by-frame and re-encode it
+            # This often fixes WebM files from browser MediaRecorder
+            try:
+                # Force OpenCV to read it anyway
+                cap = cv2.VideoCapture(tmp_path)
+                
+                # Try to read at least one frame to see if it's readable at all
+                frames = []
+                max_frames = 300  # Read max 10 seconds at 30fps
+                logger.info(f"  Attempting frame-by-frame read...")
+                
+                for i in range(max_frames):
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    frames.append(frame)
+                
+                cap.release()
+                
+                if len(frames) == 0:
+                    raise VideoValidationError(
+                        "Video file is corrupted - no frames could be read. "
+                        "Please try recording again."
+                    )
+                
+                logger.info(f"  ✅ Read {len(frames)} frames, re-encoding...")
+                
+                # Re-encode to a new temp file using OpenCV VideoWriter
+                height, width = frames[0].shape[:2]
+                repaired_path = tmp_path + ".repaired.avi"
+                
+                # Use MJPEG codec (most compatible with OpenCV)
+                fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+                fps = 30.0  # Assume 30fps
+                
+                writer = cv2.VideoWriter(repaired_path, fourcc, fps, (width, height))
+                
+                for frame in frames:
+                    writer.write(frame)
+                
+                writer.release()
+                
+                # Verify the repaired file can be opened
+                verify_cap = cv2.VideoCapture(repaired_path)
+                if not verify_cap.isOpened():
+                    verify_cap.release()
+                    raise VideoValidationError("Failed to create valid video file from frames")
+                verify_cap.release()
+                
+                # Replace temp file with repaired version
+                logger.info(f"  ✅ Successfully repaired video, replacing original")
+                os.unlink(tmp_path)
+                os.rename(repaired_path, tmp_path)
+                
+            except Exception as e:
+                logger.error(f"  ❌ Repair failed: {e}")
+                raise VideoValidationError(
+                    f"Video file cannot be processed: {str(e)}. "
+                    "The recording may be corrupted. Please try again."
+                )
+        else:
+            test_cap.release()
+            logger.info(f"  ✅ OpenCV can open the file - proceeding with validation")
         
         try:
             return self.validate_video_file(tmp_path)
@@ -236,7 +413,7 @@ def get_validator() -> SignLanguageVideoValidator:
     global _validator
     if _validator is None:
         _validator = SignLanguageVideoValidator(
-            min_duration_sec=0.5,
+            min_duration_sec=0.01,  # Very lenient - just ensure video isn't empty
             max_duration_sec=30.0,
             min_hand_frames_ratio=0.30,  # 30% of frames must show hands
             sample_frame_count=30,

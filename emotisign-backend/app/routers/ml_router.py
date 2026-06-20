@@ -43,6 +43,7 @@ async def sign_to_text_endpoint(
     video: UploadFile = File(..., description="Video file containing ASL signs"),
     use_tta: bool = Form(True, description="Enable Test-Time Augmentation"),
     is_webcam_recording: bool = Form(False, description="True when video was recorded via the webcam flow"),
+    sign_language: str = Form("ASL", description="Sign language type (ASL or PSL)"),
     ml_service: WLASLModelService = Depends(get_ml_service_dep)
 ):
     """

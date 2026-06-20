@@ -242,10 +242,15 @@ async def upload_chat_sign_video(
     """
     await _assert_member(db, room_id, current_user.id)
 
-    if video.content_type and video.content_type not in ALLOWED_CHAT_VIDEO_TYPES:
+    # Normalize content type (remove codec info if present)
+    content_type = video.content_type or ""
+    if ';' in content_type:
+        content_type = content_type.split(';')[0].strip()
+    
+    if content_type and content_type not in ALLOWED_CHAT_VIDEO_TYPES:
         raise HTTPException(
             status_code=400,
-            detail="Invalid video format. Use MP4, WEBM, AVI, or MOV.",
+            detail=f"Invalid video format '{content_type}'. Allowed: MP4, WEBM, AVI, MOV.",
         )
 
     content = await video.read()

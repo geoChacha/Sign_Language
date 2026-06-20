@@ -7,7 +7,6 @@ import {
   UserUpdateRequest,
   TextToSignRequest,
   TextToSignResponse,
-  SignToTextResponse,
   ChatRoom,
   ChatMessage,
   CreateChatRoomRequest,
@@ -16,6 +15,7 @@ import {
   SpeechToTextResponse,
   TextToSpeechResponse,
   SignLanguage,
+  PredictionResult,
 } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -104,13 +104,19 @@ class ApiClient {
     return response.data;
   }
 
-  async signToText(videoFile: File, signLanguage: SignLanguage): Promise<SignToTextResponse> {
+  async signToText(
+    videoFile: File,
+    signLanguage: SignLanguage,
+    options: { useTta?: boolean; isWebcamRecording?: boolean } = {}
+  ): Promise<PredictionResult> {
     const formData = new FormData();
     formData.append('video', videoFile);
     formData.append('sign_language', signLanguage);
+    formData.append('use_tta', String(options.useTta ?? true));
+    formData.append('is_webcam_recording', String(options.isWebcamRecording ?? false));
 
-    const response = await this.client.post<SignToTextResponse>('/api/translate/sign-to-text', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    const response = await this.client.post<PredictionResult>('/api/ml/sign-to-text', formData, {
+      headers: { 'Content-Type': undefined }, // Let browser set multipart/form-data with boundary
     });
     return response.data;
   }
@@ -158,13 +164,14 @@ class ApiClient {
     await this.client.patch(`/api/chat/rooms/${roomId}/read`);
   }
 
-  async uploadChatSignVideo(roomId: number, videoFile: File): Promise<{ video_url: string }> {
+  async uploadChatSignVideo(roomId: number, videoFile: File, signLanguage: string = 'ASL'): Promise<{ video_url: string }> {
     const formData = new FormData();
     formData.append('video', videoFile);
+    formData.append('sign_language', signLanguage);
     const response = await this.client.post<{ video_url: string }>(
       `/api/chat/rooms/${roomId}/sign-video`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } }
+      { headers: { 'Content-Type': undefined } } // Let browser set multipart/form-data with boundary
     );
     return response.data;
   }
@@ -188,7 +195,7 @@ class ApiClient {
     formData.append('include_sentiment', String(includeSentiment));
 
     const response = await this.client.post<SpeechToTextResponse>('/api/speech/speech-to-text', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined }, // Let browser set multipart/form-data with boundary
     });
     return response.data;
   }
@@ -204,7 +211,7 @@ class ApiClient {
     formData.append('voice', voice);
 
     const response = await this.client.post<TextToSpeechResponse>('/api/speech/text-to-speech', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined }, // Let browser set multipart/form-data with boundary
     });
     return response.data;
   }

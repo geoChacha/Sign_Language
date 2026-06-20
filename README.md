@@ -51,10 +51,10 @@ Data (database, uploads) is persisted in Docker named volumes across restarts.
 - **Python 3.10.9** — the setup script will download and install it automatically if missing
 - [Node.js 18+](https://nodejs.org/) — must be installed manually
 
-### 1. Clone the repo
+### 1. Clone the branch from repo
 
 ```bash
-git clone <your-repo-url>
+git clone -b https://github.com/geoChacha/Sign_Language/tree/featute_asl_complete
 cd emotisign
 ```
 
